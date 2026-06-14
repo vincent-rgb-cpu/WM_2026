@@ -65,6 +65,143 @@ if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
     slice(1)
   if (nrow(upcoming) > 0) next_match <- upcoming
 }
+
+TEAM_FLAGS <- c(
+  "Algeria"                = "\U0001F1E9\U0001F1FF",
+  "Argentina"              = "\U0001F1E6\U0001F1F7",
+  "Australia"              = "\U0001F1E6\U0001F1FA",
+  "Austria"                = "\U0001F1E6\U0001F1F9",
+  "Belgium"                = "\U0001F1E7\U0001F1EA",
+  "Bosnia and Herzegovina" = "\U0001F1E7\U0001F1E6",
+  "Brazil"                 = "\U0001F1E7\U0001F1F7",
+  "Canada"                 = "\U0001F1E8\U0001F1E6",
+  "Cape Verde"             = "\U0001F1E8\U0001F1FB",
+  "Colombia"               = "\U0001F1E8\U0001F1F4",
+  "Croatia"                = "\U0001F1ED\U0001F1F7",
+  "Curaçao"           = "\U0001F1E8\U0001F1FC",
+  "Czech Republic"         = "\U0001F1E8\U0001F1FF",
+  "DR Congo"               = "\U0001F1E8\U0001F1E9",
+  "Ecuador"                = "\U0001F1EA\U0001F1E8",
+  "Egypt"                  = "\U0001F1EA\U0001F1EC",
+  "England"                = "\U0001F1EC\U0001F1E7",
+  "France"                 = "\U0001F1EB\U0001F1F7",
+  "Germany"                = "\U0001F1E9\U0001F1EA",
+  "Ghana"                  = "\U0001F1EC\U0001F1ED",
+  "Haiti"                  = "\U0001F1ED\U0001F1F9",
+  "Iran"                   = "\U0001F1EE\U0001F1F7",
+  "Iraq"                   = "\U0001F1EE\U0001F1F6",
+  "Ivory Coast"            = "\U0001F1E8\U0001F1EE",
+  "Japan"                  = "\U0001F1EF\U0001F1F5",
+  "Jordan"                 = "\U0001F1EF\U0001F1F4",
+  "Mexico"                 = "\U0001F1F2\U0001F1FD",
+  "Morocco"                = "\U0001F1F2\U0001F1E6",
+  "Netherlands"            = "\U0001F1F3\U0001F1F1",
+  "New Zealand"            = "\U0001F1F3\U0001F1FF",
+  "Norway"                 = "\U0001F1F3\U0001F1F4",
+  "Panama"                 = "\U0001F1F5\U0001F1E6",
+  "Paraguay"               = "\U0001F1F5\U0001F1FE",
+  "Portugal"               = "\U0001F1F5\U0001F1F9",
+  "Qatar"                  = "\U0001F1F6\U0001F1E6",
+  "Saudi Arabia"           = "\U0001F1F8\U0001F1E6",
+  "Scotland"               = "\U0001F1EC\U0001F1E7",
+  "Senegal"                = "\U0001F1F8\U0001F1F3",
+  "South Africa"           = "\U0001F1FF\U0001F1E6",
+  "South Korea"            = "\U0001F1F0\U0001F1F7",
+  "Spain"                  = "\U0001F1EA\U0001F1F8",
+  "Sweden"                 = "\U0001F1F8\U0001F1EA",
+  "Switzerland"            = "\U0001F1E8\U0001F1ED",
+  "Tunisia"                = "\U0001F1F9\U0001F1F3",
+  "Turkey"                 = "\U0001F1F9\U0001F1F7",
+  "United States"          = "\U0001F1FA\U0001F1F8",
+  "Uruguay"                = "\U0001F1FA\U0001F1FE",
+  "Uzbekistan"             = "\U0001F1FA\U0001F1FF"
+)
+
+team_label <- function(name) {
+  flag <- TEAM_FLAGS[name]
+  if (!is.na(flag)) paste0(flag, " ", name) else name
+}
+```
+
+# Predictions
+
+## Row
+
+### Upcoming Fixtures & Model Predictions
+
+```{r}
+if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
+  played_ids   <- if (has_matches) match_log$match_id else integer(0)
+  upcoming_all <- fixture_preds %>%
+    filter(!(match_id %in% played_ids)) %>%
+    arrange(date)
+
+  if (nrow(upcoming_all) > 0) {
+    pred_df <- upcoming_all %>%
+      rowwise() %>%
+      mutate(
+        Date  = format(as.Date(date), "%a %d %b"),
+        Stage = if (stage == "group") paste0("Grp ", group)
+                else tools::toTitleCase(gsub("_", " ", stage)),
+        Home  = team_label(home_team),
+        Away  = team_label(away_team),
+        Pick  = dplyr::case_when(
+          pred_result == "home_win" ~ team_label(home_team),
+          pred_result == "draw"     ~ "Draw",
+          TRUE                      ~ team_label(away_team)
+        ),
+        `P(H)` = round(p_home_win * 100, 1),
+        `P(D)` = round(p_draw     * 100, 1),
+        `P(A)` = round(p_away_win * 100, 1)
+      ) %>%
+      ungroup() %>%
+      select(Date, Stage, Home, Away, `P(H)`, `P(D)`, `P(A)`, Pick)
+
+    DT::datatable(
+      pred_df,
+      escape   = FALSE,
+      rownames = FALSE,
+      options  = list(
+        pageLength = 30,
+        dom        = "tip",
+        scrollX    = TRUE,
+        columnDefs = list(
+          list(className = "dt-center", targets = c(0, 1, 4, 5, 6)),
+          list(width = "22%", targets = c(2, 3)),
+          list(width = "7%",  targets = c(4, 5, 6))
+        )
+      ),
+      class = "table-dark table-sm table-hover"
+    ) %>%
+      DT::formatStyle(
+        "P(H)",
+        background         = DT::styleColorBar(c(0, 100), "#4a6fa5"),
+        backgroundSize     = "98% 55%",
+        backgroundRepeat   = "no-repeat",
+        backgroundPosition = "center"
+      ) %>%
+      DT::formatStyle(
+        "P(D)",
+        background         = DT::styleColorBar(c(0, 100), "#5a6268"),
+        backgroundSize     = "98% 55%",
+        backgroundRepeat   = "no-repeat",
+        backgroundPosition = "center"
+      ) %>%
+      DT::formatStyle(
+        "P(A)",
+        background         = DT::styleColorBar(c(0, 100), "#c0392b"),
+        backgroundSize     = "98% 55%",
+        backgroundRepeat   = "no-repeat",
+        backgroundPosition = "center"
+      ) %>%
+      DT::formatStyle("Pick", fontWeight = "bold", color = "#28a745") %>%
+      DT::formatStyle(c("P(H)", "P(D)", "P(A)"), color = "#e0e0e0")
+  } else {
+    cat("All fixtures have been played — check the Financial Simulation tab for results.")
+  }
+} else {
+  cat("Fixture predictions not available.")
+}
 ```
 
 # ML Metrics
