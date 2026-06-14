@@ -194,22 +194,36 @@ def select_round(page, round_spec: str) -> None:
     # Give React time to finish mounting after networkidle.
     page.wait_for_timeout(1500)
 
+    # --- Check current round first -------------------------------------------
+    # If the singleValue element shows we're already on the right round, skip.
+    # If no round selector exists at all (page in past/future-round state),
+    # warn and return — the match scraper will handle 0 open cards gracefully.
+    single_val = page.locator("div[class*='-singleValue']")
+    if single_val.count() == 0:
+        print(f"  WARNING: round selector not found on page — proceeding with current view.")
+        return
+    current_text = single_val.first.inner_text().strip()
+    print(f"  Current round on page: {current_text!r}")
+    if round_spec.strip().lower() in current_text.lower():
+        print(f"  Already on correct round — no navigation needed.")
+        return
+
+    # --- Open the dropdown ---------------------------------------------------
     opened = False
 
-    # Approach 1: focus the hidden input inside the react-select control and
-    # press ArrowDown — the keyboard path that react-select always responds to,
-    # regardless of headless-mode click quirks.
+    # Approach 1: focus the hidden input and press ArrowDown (most reliable for
+    # react-select — keyboard events always reach the component).
     try:
         inp = page.locator("div[class*='-control'] input").first
         inp.focus(timeout=DROPDOWN_TIMEOUT_MS)
         page.keyboard.press("ArrowDown")
         page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
-        print("  Dropdown opened via keyboard (ArrowDown on control input)")
+        print("  Dropdown opened via keyboard (ArrowDown)")
         opened = True
     except (PlaywrightTimeout, Exception):
         pass
 
-    # Approach 2: click / mousedown on each candidate selector.
+    # Approach 2: click / mousedown on candidate selectors.
     if not opened:
         for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
             for method in ("click", "mousedown"):
@@ -310,10 +324,14 @@ def submit_tips(df: pd.DataFrame, dry_run: bool = False,
         try:
             page.wait_for_selector(SEL_MATCH_CARD, timeout=CARD_WAIT_TIMEOUT_MS)
         except PlaywrightTimeout:
-            raise SessionExpiredError(
-                "No match cards found — session may have expired. "
-                "Re-run setup_login.py to refresh srg_session.json."
-            )
+            if round_spec is not None:
+                # Betting for this round may not be open yet — not a session error.
+                print("  No match cards found for this round (betting may not be open yet).")
+            else:
+                raise SessionExpiredError(
+                    "No match cards found — session may have expired. "
+                    "Re-run setup_login.py to refresh srg_session.json."
+                )
 
         cards = page.locator(SEL_MATCH_CARD).all()
         print(f"Found {len(cards)} match card(s) on the page.\n")
