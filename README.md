@@ -31,8 +31,9 @@ Auto-updated daily at 07:00 UTC throughout the tournament. Three tabs:
 
 ## Results at a glance
 
-Held-out evaluation on international matches from **2021 onwards** (the model
-never sees them during training):
+### Held-out model accuracy
+
+Evaluated on international matches from **2021 onwards** (never seen during training):
 
 | Model                     | Accuracy | Log-loss | Brier |
 |---------------------------|:--------:|:--------:|:-----:|
@@ -41,28 +42,47 @@ never sees them during training):
 | Baseline: majority class  |   0.480  |  17.97   | 1.040 |
 
 ~61 % three-way accuracy is realistic for international football (draws are
-inherently hard to predict). Live WC-2026 accuracy is shown on the dashboard
-and updated with every new result.
+inherently hard to predict). Live WC-2026 accuracy is updated on the dashboard
+after each result.
+
+### WC-2026 live results
+
+**9 matches played** (through 14 Jun 2026) — accuracy **55.6 %**, mean log-loss **0.847**
+
+| Date | Match | Score | Predicted | Correct |
+|------|-------|-------|-----------|---------|
+| 11 Jun | Mexico vs South Africa | 2–0 | Home win | ✓ |
+| 11 Jun | South Korea vs Czech Republic | 2–1 | Home win | ✓ |
+| 12 Jun | Canada vs Bosnia and Herzegovina | 1–1 | Home win | ✗ |
+| 12 Jun | United States vs Paraguay | 4–1 | Home win | ✓ |
+| 13 Jun | Haiti vs Scotland | 0–1 | Away win | ✓ |
+| 13 Jun | Australia vs Turkey | 2–0 | Away win | ✗ |
+| 13 Jun | Brazil vs Morocco | 1–1 | Home win | ✗ |
+| 13 Jun | Qatar vs Switzerland | 1–1 | Away win | ✗ |
+| 14 Jun | Germany vs Curaçao | 7–1 | Home win | ✓ |
 
 ### Tournament odds (Monte-Carlo, N = 10,000)
 
-| Team       | Win Cup | Make Final | Make SF | Make R16 |
-|------------|:-------:|:----------:|:-------:|:--------:|
-| France     | 17.2 %  |   29.0 %   | 45.2 %  |  97.8 %  |
-| Spain      | 15.5 %  |   24.3 %   | 39.6 %  |  99.4 %  |
-| Argentina  | 14.0 %  |   25.0 %   | 42.9 %  |  98.3 %  |
-| England    | 13.6 %  |   22.5 %   | 38.3 %  |  99.1 %  |
-| Brazil     |  8.6 %  |   16.2 %   | 28.6 %  |  97.6 %  |
-| Portugal   |  6.6 %  |   14.0 %   | 26.1 %  |  98.6 %  |
+| Team        | Win Cup | Make Final | Make SF | Make QF | Make R16 |
+|-------------|:-------:|:----------:|:-------:|:-------:|:--------:|
+| France      | 17.2 %  |   29.0 %   | 45.2 %  | 61.4 %  |  83.1 %  |
+| Spain       | 15.5 %  |   24.3 %   | 39.6 %  | 50.4 %  |  70.5 %  |
+| Argentina   | 14.0 %  |   25.0 %   | 42.9 %  | 61.3 %  |  72.5 %  |
+| England     | 13.6 %  |   22.5 %   | 38.2 %  | 57.7 %  |  77.6 %  |
+| Brazil      |  8.6 %  |   16.2 %   | 28.6 %  | 47.2 %  |  69.3 %  |
+| Portugal    |  6.6 %  |   14.0 %   | 26.1 %  | 44.1 %  |  77.5 %  |
+| Colombia    |  4.4 %  |    9.3 %   | 16.6 %  | 30.2 %  |  54.5 %  |
+| Morocco     |  3.5 %  |    8.3 %   | 16.8 %  | 36.5 %  |  57.4 %  |
+| Germany     |  2.8 %  |    7.1 %   | 15.9 %  | 30.2 %  |  67.5 %  |
+| Belgium     |  1.9 %  |    6.0 %   | 13.8 %  | 36.4 %  |  68.4 %  |
+| Netherlands |  1.8 %  |    5.1 %   | 11.9 %  | 27.3 %  |  44.8 %  |
+| Switzerland |  1.3 %  |    3.8 %   | 10.2 %  | 36.9 %  |  67.3 %  |
 
 Full results for all 48 teams are in `output/tournament_probabilities.csv` and
-shown in the dashboard. The simulation is internally consistent: per-round
-probabilities sum to exactly the number of slots (Win Cup = 100 %, finalists =
-200 %, …).
+shown in the dashboard.
 
-> ⚠️ Elo-driven models concentrate probability on strong teams — top-team title
-> odds run slightly higher than the betting market. Treat these as model
-> estimates, not forecasts.
+> ⚠️ Elo-driven models concentrate probability on historically strong teams.
+> Treat these as model estimates, not forecasts.
 
 ---
 
@@ -98,7 +118,7 @@ Rscript scripts/05_exact_scores.R        # Poisson xG → exact scorelines
 # Fetch squad market values (Transfermarkt, 7-day cache)
 make mv
 
-# Fetch real pre-match h2h odds from The Odds API (1-day cache)
+# Fetch real pre-match h2h odds from The Odds API (1-day cache; needs ODDS_API_KEY)
 export ODDS_API_KEY=<your_key>
 make odds
 
@@ -123,6 +143,17 @@ Runs a random search over `eta`, `max_depth`, `min_child_weight`, `subsample`,
 `colsample_bytree`, and `gamma` on the same time-split used for evaluation.
 Results are written to `output/tuning_results.csv`. Copy the best row into
 `XGB_PARAMS` in `R/config.R` and re-run stage 02.
+
+### Discord / Slack value-bet notifications (stage 08)
+
+```bash
+export WEBHOOK_URL=https://discord.com/api/webhooks/...
+Rscript scripts/08_send_notification.R
+```
+
+Computes today's value bets (edge ≥ 3 %) and fires a POST to a Discord or Slack
+incoming webhook. Run automatically at the end of the daily CI pipeline. For
+Slack, change the payload key from `content` to `text` in the script.
 
 ### Local dashboard preview
 
@@ -167,11 +198,11 @@ WM_2026/
 ├── R/                            # library code (functions only, no side effects)
 │   ├── config.R                  # paths, URLs, hyper-parameters, feature list
 │   ├── utils.R                   # shared helpers (logging, pipe, etc.)
-│   ├── team_mapping.R            # reconcile team names across sources
+│   ├── team_mapping.R            # reconcile team names across data sources
 │   ├── data_reader.R             # WC-2026 fixtures API  → tidy match tibble
 │   ├── historical_data.R         # historical results CSV → tidy match tibble
-│   ├── features.R                # Elo (slow + fast), rolling-form, importance features
-│   ├── model.R                   # xgboost train / predict / persist
+│   ├── features.R                # Elo (slow + fast), rolling form, match importance
+│   ├── model.R                   # xgboost train / calibrate / predict / persist
 │   ├── evaluate.R                # time-split metrics vs. baselines
 │   ├── predict.R                 # per-fixture W/D/L predictions + dead-rubber sim
 │   ├── monte_carlo.R             # full bracket simulation (groups → final)
@@ -181,13 +212,14 @@ WM_2026/
 │   ├── 00_setup.R                #   install R dependencies via renv
 │   ├── 01_build_dataset.R        #   readers + features  → training_data.rds
 │   ├── 01b_scrape_market_values.R#   Transfermarkt squad values → squad_market_values.csv
-│   ├── 01c_fetch_real_odds.R     #   The Odds API h2h → real_market_odds.csv
+│   ├── 01c_fetch_real_odds.R     #   The Odds API h2h → real_market_odds.csv (upsert)
 │   ├── 02_train_evaluate.R       #   evaluate + fit final model → result_model.rds
 │   ├── 03_predict_tournament.R   #   per-fixture predictions + group sim → output/*.csv
 │   ├── 04_simulate.R             #   tournament Monte-Carlo → tournament_probabilities.csv
 │   ├── 05_exact_scores.R         #   Poisson scorelines  → scoreline_predictions.csv
 │   ├── 06_financial_benchmark.R  #   live metrics + Quarter-Kelly P&L → output/*.csv
-│   └── 07_tune_hyperparameters.R #   random search for XGBoost hyperparameters
+│   ├── 07_tune_hyperparameters.R #   random search for XGBoost hyperparameters
+│   └── 08_send_notification.R    #   Discord/Slack webhook for today's value bets
 │
 ├── dashboard/
 │   ├── index.qmd                 # Quarto dashboard (Predictions + ML Metrics + Financial)
@@ -199,16 +231,17 @@ WM_2026/
 ├── data/
 │   └── raw/
 │       └── wc2026_fixtures.json  # committed as CI fallback (refreshed locally)
-├── output/                       # model outputs committed for dashboard (see below)
+├── output/                       # model outputs committed for dashboard
 │   ├── fixture_predictions.csv   #   upcoming fixture W/D/L probabilities
 │   ├── scoreline_predictions.csv #   most likely exact scorelines per fixture
 │   ├── wc2026_match_log.csv      #   live match results + model predictions + P&L
 │   ├── financial_benchmark.csv   #   cumulative bankroll time series
 │   ├── evaluation_metrics.csv    #   held-out accuracy / log-loss / Brier
-│   └── tournament_probabilities.csv # title & round-advancement odds (all 48 teams)
+│   ├── tournament_probabilities.csv # title & round-advancement odds (all 48 teams)
+│   └── tuning_results.csv        #   hyperparameter search results (all trials)
 │
 ├── run_all.R                     # runs R stages 01 → 06 in sequence
-├── run_pipeline.sh               # R pipeline (cron entry point)
+├── run_pipeline.sh               # full pipeline shell wrapper (cron entry point)
 └── Makefile                      # all targets — see `make help` or below
 ```
 
@@ -226,7 +259,7 @@ make scorelines     stage 05: Poisson exact scorelines
 make benchmark      stage 06: live accuracy metrics + Kelly P&L simulation
 make all            stages 01–05 in sequence
 make dashboard      render Quarto dashboard locally (opens in browser)
-make pipeline       full R pipeline (cron entry point)
+make pipeline       full pipeline (cron entry point: stages 01–06 + odds + notify)
 make lock           snapshot R packages to renv.lock
 make clean          remove all generated artefacts (keeps raw data cache)
 ```
@@ -242,7 +275,7 @@ All features are computed *before* each match to prevent data leakage:
 | Feature | Description |
 |---------|-------------|
 | `elo_home_pre`, `elo_away_pre` | Pre-match slow Elo ratings (World-Football-Elo style with log-scale goal-difference multiplier and FiveThirtyEight autocorrelation correction) |
-| `momentum_home`, `momentum_away` | Fast Elo − Slow Elo: a parallel Elo computed with K×3 (K=60) that reacts to the last ~3 matches, capturing current squad form independent of long-run strength |
+| `momentum_home`, `momentum_away` | Fast Elo − Slow Elo: a parallel Elo computed with K×3 (K = 60) that reacts to the last ~3 matches, capturing recent form independently of long-run strength |
 | `home_adv` | 1 for the WC-2026 co-hosts (USA, Canada, Mexico) in their home matches, 0 for all other WC fixtures (neutral venues) |
 | `form_pts_diff` | Difference in rolling points over each team's last 5 matches |
 | `form_gf_diff` | Difference in rolling goals-for over the last 5 matches |
@@ -255,15 +288,20 @@ All features are computed *before* each match to prevent data leakage:
 ### Algorithm
 
 - **XGBoost** multiclass (`multi:softprob`, 3 classes), hyperparameters tuned
-  via random search (`scripts/07_tune_hyperparameters.R`):
+  via random search (`scripts/07_tune_hyperparameters.R`, 60 trials):
 
   ```
   eta=0.04  max_depth=3  min_child_weight=10  gamma=0.30
   subsample=0.85  colsample_bytree=0.85  nrounds=300
   ```
 
-  Heavy regularisation (`gamma`, `min_child_weight`) prevents the fast-Elo
-  momentum features from dominating shallow splits.
+  Heavy regularisation (`gamma=0.30`, `min_child_weight=10`) prevents the
+  fast-Elo momentum features from dominating shallow splits.
+
+- **Probability calibration:** a multinomial logistic regression (Platt scaling)
+  is fitted on the XGBoost validation-set outputs and attached to the model
+  bundle. Every downstream `predict_proba()` call applies calibration
+  automatically, correcting systematic over-confidence before edge calculations.
 
 - **Recency weighting:** `exp(-0.00050 × days_before_ref)` (~3.8-year half-life).
   The reference date is anchored to `WC_START` (2026-06-11) so weights stay
@@ -285,25 +323,27 @@ All features are computed *before* each match to prevent data leakage:
 
 Two Elo series run in parallel from the same 1500 starting point:
 
-| | Slow Elo | Fast Elo |
-|---|---|---|
-| K-factor | 20 | 60 (3×) |
-| Half-life | ~35 matches | ~3 matches |
-| Role | Long-run team strength | Recent momentum |
-| Feature | `elo_home/away_pre` | feeds `momentum_home/away` |
+|                | Slow Elo              | Fast Elo              |
+|----------------|----------------------|----------------------|
+| K-factor       | 20                   | 60 (3×)              |
+| Half-life      | ~35 matches          | ~3 matches           |
+| Role           | Long-run team strength | Recent momentum     |
+| Feature        | `elo_home/away_pre`  | feeds `momentum_home/away` |
 
-Both use the same log-scale goal-difference multiplier and FiveThirtyEight
+Both apply the same log-scale goal-difference multiplier and FiveThirtyEight
 autocorrelation correction: upsets earn more Elo points than dominant wins over
 weaker opponents.
 
 ### Poisson scoreline model (stage 05)
 
-Translates W/D/L probabilities into exact scorelines:
+Translates W/D/L probabilities into the most likely exact scoreline:
 
 - Symmetric GLM: `log(E[goals]) = α + β_att·elo_att + β_def·elo_def + β_home·is_home`
 - Fitted on matches since 2010 (~15,000 matches, 31,000 scorer-rows) with
   the same recency weighting as the main model
-- For each fixture: computes a 6×6 probability matrix (0–5 goals per side),
+- Dixon-Coles low-score correction applied (ρ = −0.15) to fix the independent
+  Poisson model's systematic under-prediction of 0–0 and 1–1 draws
+- For each fixture: builds a 6×6 score-probability matrix (0–5 goals per side),
   selects the most-probable cell **that falls in the same W/D/L region**
   predicted by XGBoost — the two models are complementary
 
@@ -312,9 +352,9 @@ Translates W/D/L probabilities into exact scorelines:
 `scripts/01b_scrape_market_values.R` fetches total squad market values from
 Transfermarkt national team pages (HTTP with UA spoofing). Results are cached
 for 7 days in `data/raw/squad_market_values.csv`. Market values are
-log-transformed before entering the model and are among the top-5 most
+log-transformed before entering the model and rank among the top-5 most
 important features after Elo ratings. Missing values are left as `NA` —
-XGBoost routes them to the default split path.
+XGBoost routes them natively to the default split path.
 
 ### Full tournament simulation (stage 04)
 
@@ -368,9 +408,16 @@ output/wc2026_match_log.csv
 ```
 
 **Important timing note:** pre-match odds are only available in the API feed
-*before* a match kicks off. The daily cron ensures odds are cached for upcoming
-matches; the upsert strategy retains them after the match finishes and
-disappears from the live feed.
+*before* a match kicks off. The daily cron at 07:00 UTC caches upcoming-match
+odds each morning; the upsert strategy retains them after those matches finish
+and disappear from the live feed.
+
+### Value-bet notifications (stage 08)
+
+`scripts/08_send_notification.R` runs at the end of the CI pipeline. It reads
+today's fixture predictions, computes `edge = model_prob − 1/market_odds` for
+the predicted outcome, and fires a webhook POST to Discord (or Slack) for any
+match clearing the 3 % edge threshold. Set `WEBHOOK_URL` as a repository secret.
 
 ---
 
@@ -390,14 +437,16 @@ and on every push to `main` that touches R, scripts, or dashboard files.
 6. Stages 01 → 05 (build → train → predict → simulate → scorelines)
 7. Fetch real odds (requires `ODDS_API_KEY` secret in repo Settings)
 8. Stage 06 — financial benchmark
-9. Render Quarto dashboard with `quarto render dashboard/index.qmd`
-10. Deploy rendered HTML to the `gh-pages` branch via `peaceiris/actions-gh-pages`
+9. Stage 08 — Discord/Slack value-bet notification
+10. Render Quarto dashboard with `quarto render dashboard/index.qmd`
+11. Deploy rendered HTML to the `gh-pages` branch via `peaceiris/actions-gh-pages`
 
-### Required repository secret
+### Required repository secrets
 
 | Secret | Purpose |
 |--------|---------|
 | `ODDS_API_KEY` | The Odds API key (free tier: 500 requests/month). Get one at [the-odds-api.com](https://the-odds-api.com). If unset, the odds step exits cleanly and the benchmark runs without bets. |
+| `WEBHOOK_URL` | Discord or Slack incoming webhook URL for value-bet alerts. If unset, stage 08 exits cleanly with no notification sent. |
 
 ### GitHub Pages setup
 
@@ -408,19 +457,20 @@ In your repo: **Settings → Pages → Source → `gh-pages` branch, `/ (root)`*
 ## Limitations & possible next steps
 
 - **No player-level data** — injuries, line-ups, and suspensions are not
-  modelled. The fast-Elo momentum partially proxies recent form, but cannot
+  modelled. The fast-Elo momentum partially proxies recent form but cannot
   capture a star player being absent.
 - **No goal difference in the group-stage Monte-Carlo.** The Poisson model
   predicts scorelines (stage 05), but the vectorised group simulator uses
-  W/D/L for speed. Integrating Poisson draws would give proper GD tie-breakers.
+  W/D/L for speed. Integrating Poisson draws would enable proper GD
+  tie-breakers and more realistic advancement probabilities.
+- **Group matches are re-sampled** even if already played; finished results
+  feed Elo ratings but are not pinned in the simulation. Conditioning on known
+  results is a straightforward refinement.
 - **Third-place routing** uses bipartite matching, not FIFA's exact published
   permutation table — a negligible difference in aggregate probabilities.
 - **Elo-driven concentration.** Title odds for favourites run above the
   betting market because team strength enters mainly through Elo across seven
   rounds with no upset variance from tactical mismatches.
-- **Group matches are re-sampled** even if already played; finished results
-  feed Elo ratings but are not pinned in the simulation. Conditioning on known
-  results is an easy refinement.
 - **Market efficiency gap.** Pinnacle's lines are set by professional quants
   with live squad data. An edge ≥ 3 % against Pinnacle is rare; this pipeline
   is a calibration benchmark rather than a live betting system.
