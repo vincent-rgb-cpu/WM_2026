@@ -88,7 +88,7 @@ EN_TO_DE: dict[str, str] = {
     "Romania":                  "Rumänien",
     "Albania":                  "Albanien",
     "Greece":                   "Griechenland",
-    "Bosnia and Herzegovina":   "Bosnien-Herzegowina",
+    "Bosnia and Herzegovina":   "Bosnien-Herzeg.",
     "Iceland":                  "Island",
     "Ukraine":                  "Ukraine",
     # Africa
@@ -121,6 +121,7 @@ EN_TO_DE: dict[str, str] = {
     "Mexico":                   "Mexiko",
     "Canada":                   "Kanada",
     "Panama":                   "Panama",
+    "Qatar":                    "Katar",
     "Costa Rica":               "Costa Rica",
     "Jamaica":                  "Jamaika",
     "Curaçao":                  "Curaçao",
