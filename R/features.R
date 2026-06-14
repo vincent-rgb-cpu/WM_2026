@@ -115,6 +115,11 @@ build_features <- function(matches, params = ELO_PARAMS) {
   matches <- add_form_features(elo$matches)
 
   latest_date <- max(matches$date, na.rm = TRUE)
+  mv          <- load_market_values()
+  mv_log      <- function(team) {
+    v <- mv[team]
+    ifelse(is.na(v) | v <= 0, NA_real_, log(v))
+  }
 
   feats <- matches %>%
     mutate(
@@ -132,10 +137,31 @@ build_features <- function(matches, params = ELO_PARAMS) {
       form_gf_diff  = home_form_gf  - away_form_gf,
       form_ga_diff  = home_form_ga  - away_form_ga,
       rest_diff     = pmin(home_days_rest, 365) - pmin(away_days_rest, 365),
-      sample_weight = exp(-RECENCY_DECAY * as.numeric(latest_date - date))
+      sample_weight = exp(-RECENCY_DECAY * as.numeric(latest_date - date)),
+      log_mv_home   = mv_log(home_team),
+      log_mv_away   = mv_log(away_team)
     )
 
+  n_mv <- sum(!is.na(feats$log_mv_home) | !is.na(feats$log_mv_away))
+  log_msg("Market value coverage: ", n_mv, " / ", nrow(feats),
+          " rows have at least one team MV")
+
   list(data = feats, ratings = elo$ratings)
+}
+
+# --- Squad market values (Transfermarkt) -------------------------------------
+# Returns a named numeric vector: team_name -> mv_eur.
+# Missing or unparseable entries are silently dropped; callers receive NA for
+# those teams, which xgboost routes to the default (mean) split path.
+load_market_values <- function(path = FILES$market_values) {
+  if (!file.exists(path)) {
+    log_msg("No market value cache at ", path,
+            " — run scripts/01b_scrape_market_values.R to enable log_mv features.")
+    return(setNames(numeric(0), character(0)))
+  }
+  df <- read.csv(path, stringsAsFactors = FALSE)
+  df <- df[!is.na(df$mv_eur) & df$mv_eur > 0, ]
+  setNames(df$mv_eur, df$team)
 }
 
 # --- Current-state snapshot (for predicting upcoming fixtures) ----------------

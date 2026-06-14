@@ -24,7 +24,8 @@ FILES <- list(
   fixture_preds   = file.path(PATHS$output, "fixture_predictions.csv"),
   group_sim       = file.path(PATHS$output, "group_stage_simulation.csv"),
   tournament_prob = file.path(PATHS$output, "tournament_probabilities.csv"),
-  srf_predictions = file.path(PATHS$output, "srf_predictions.csv")
+  srf_predictions = file.path(PATHS$output, "srf_predictions.csv"),
+  market_values   = file.path(PATHS$data_raw, "squad_market_values.csv")
 )
 
 # --- Data sources ------------------------------------------------------------
@@ -82,7 +83,8 @@ XGB_NROUNDS <- 250L
 # it wastes tree splits and pollutes feature-importance scores.
 FEATURE_COLS <- c(
   "elo_home_pre", "elo_away_pre", "home_adv",
-  "form_pts_diff", "form_gf_diff", "form_ga_diff", "rest_diff"
+  "form_pts_diff", "form_gf_diff", "form_ga_diff", "rest_diff",
+  "log_mv_home", "log_mv_away"
 )
 
 # Minimum match date used to train the Poisson goals model. A tighter window

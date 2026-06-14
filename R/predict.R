@@ -25,6 +25,8 @@ predict_fixtures <- function(model, fixtures, ratings, team_form,
     v <- team_form$last_date[team_form$team == t]
     if (length(v)) v[1] else NA
   }
+  mv     <- load_market_values()
+  mv_log <- function(t) { v <- mv[t]; ifelse(is.na(v) | v <= 0, NA_real_, log(v)) }
 
   fx <- fixtures %>%
     rowwise() %>%
@@ -40,7 +42,9 @@ predict_fixtures <- function(model, fixtures, ratings, team_form,
       form_ga_diff  = form_of(home_team, "cur_form_ga", 1) -
                       form_of(away_team, "cur_form_ga", 1),
       rest_diff     = pmin(as.numeric(ref_date - last_of(home_team)), 365) -
-                      pmin(as.numeric(ref_date - last_of(away_team)), 365)
+                      pmin(as.numeric(ref_date - last_of(away_team)), 365),
+      log_mv_home   = mv_log(home_team),
+      log_mv_away   = mv_log(away_team)
     ) %>%
     ungroup()
 

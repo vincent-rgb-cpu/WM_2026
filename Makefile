@@ -21,7 +21,7 @@ RSCRIPT = Rscript
 PYTHON  = python3
 
 .PHONY: all setup data train predict simulate simulate-n scorelines \
-        setup-python venv login submit dry-run pipeline lock clean
+        setup-python venv login submit dry-run pipeline lock clean mv
 
 # ── R pipeline ───────────────────────────────────────────────────────────────
 
@@ -29,6 +29,10 @@ all: data train predict simulate scorelines
 
 setup:
 	$(RSCRIPT) scripts/00_setup.R
+
+# Fetch squad market values from Transfermarkt (cached 7 days; run before `data`).
+mv:
+	$(RSCRIPT) scripts/01b_scrape_market_values.R
 
 data:
 	$(RSCRIPT) scripts/01_build_dataset.R
