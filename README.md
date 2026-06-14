@@ -58,11 +58,13 @@ slots (Win = 100 %, finalists = 200 %, …, Round of 32 = 3200 %).
 
 ## How to run
 
+### R pipeline
+
 Requires **R ≥ 4.1**. From the project root:
 
 ```bash
-make setup     # install required packages (first run only)
-make all       # data -> train & evaluate -> predict -> simulate tournament
+make setup     # install R packages (first run only)
+make all       # stages 01-05: data -> train -> predict -> simulate -> scorelines
 ```
 
 …or without `make`:
@@ -77,10 +79,48 @@ Rscript run_all.R
 ```bash
 Rscript scripts/01_build_dataset.R      # download + feature engineering
 Rscript scripts/02_train_evaluate.R     # time-split evaluation + final model
-Rscript scripts/03_predict_tournament.R # fixture predictions + group sim
+Rscript scripts/03_predict_tournament.R # fixture predictions + group simulation
 Rscript scripts/04_simulate.R           # full-tournament Monte-Carlo (N=10,000)
 Rscript scripts/04_simulate.R 100       # ...or override N for a quick run
+Rscript scripts/05_exact_scores.R       # Poisson xG -> exact scorelines (SRF)
 ```
+
+### SRF Tippspiel automation (Python)
+
+Requires Python 3.9+ and a Chromium browser.
+
+```bash
+# 1. Install dependencies (once)
+make setup-python
+
+# 2. Capture your SRF login session interactively (once, or when it expires)
+make login
+#   → A browser window opens. Log in manually, then press ENTER in the terminal.
+#   → python_bot/srg_session.json is created (git-ignored — never commit it).
+
+# 3. Submit predictions (headless, safe to automate)
+make submit
+
+# 4. Test selector matching without writing anything to the page
+make dry-run
+```
+
+> **Before running `make submit`:** update the CSS selector constants at the
+> top of [`python_bot/submit_tips.py`](python_bot/submit_tips.py) with the real
+> values from the SRF Tippspiel page. The file contains a detailed guide on how
+> to find them with browser DevTools.
+
+### Fully automated (cron)
+
+```bash
+# Run the entire pipeline + submission every hour at :00
+make pipeline          # manual test run first
+
+# Then add to crontab (run `crontab -e`):
+0 * * * * cd /absolute/path/to/WM_2026 && bash run_pipeline.sh >> logs/cron.log 2>&1
+```
+
+Get your absolute path with `pwd` inside the project directory.
 
 ---
 
@@ -115,16 +155,24 @@ WM_2026/
 │   ├── model.R              # MODEL: train / predict / persist (xgboost)
 │   ├── evaluate.R           # time-split metrics vs. baselines
 │   ├── predict.R            # fixture predictions + Monte-Carlo group sim
-│   └── monte_carlo.R        # SIMULATE: full bracket (groups -> final), N times
+│   ├── monte_carlo.R        # SIMULATE: full bracket (groups -> final), N times
+│   └── scorelines.R         # SCORE: Poisson xG model -> exact scorelines
 ├── scripts/                 # drivers that compose the library into a pipeline
-│   ├── 00_setup.R           #   install dependencies
+│   ├── 00_setup.R           #   install R dependencies
 │   ├── 01_build_dataset.R   #   readers + features  -> training_data.rds
 │   ├── 02_train_evaluate.R  #   evaluate + fit final -> result_model.rds
 │   ├── 03_predict_tournament.R #  per-fixture preds  -> output/*.csv
-│   └── 04_simulate.R        #   tournament Monte-Carlo -> tournament_probabilities.csv
-├── run_all.R                # runs stages 01 -> 02 -> 03 -> 04
-├── Makefile                 # make setup | data | train | predict | simulate | all
+│   ├── 04_simulate.R        #   tournament Monte-Carlo -> tournament_probabilities.csv
+│   └── 05_exact_scores.R    #   Poisson scorelines  -> srf_predictions.csv
+├── python_bot/              # SRF Tippspiel automation
+│   ├── setup_login.py       #   interactive one-time session capture
+│   ├── submit_tips.py       #   headless submission bot
+│   └── requirements.txt     #   playwright, pandas
+├── run_all.R                # runs R stages 01 -> 02 -> 03 -> 04 -> 05
+├── run_pipeline.sh          # R pipeline + Python submission (cron entry point)
+├── Makefile                 # make setup | train | simulate | login | submit | ...
 ├── data/                    # raw cache + processed datasets (git-ignored)
+├── logs/                    # per-run pipeline logs (git-ignored)
 └── output/                  # predictions, metrics, saved model (git-ignored)
 ```
 
@@ -166,6 +214,18 @@ WM_2026/
                                     └───────┬────────┘
                                             ▼
                        04 ──► output/tournament_probabilities.csv
+                                            ▼
+                                    ┌────────────────┐
+                                    │ scorelines.R   │  Poisson xG -> probability
+                                    │                │  matrix -> best scoreline
+                                    └───────┬────────┘  aligned with W/D/L label
+                                            ▼
+                       05 ──► output/srf_predictions.csv
+                                            ▼
+                                    ┌────────────────┐
+                                    │ submit_tips.py │  headless Playwright bot
+                                    │                │  -> SRF Tippspiel website
+                                    └────────────────┘
 ```
 
 ---
@@ -209,6 +269,24 @@ WM_2026/
     (`P_A + P_draw · P_A/(P_A+P_B)`) before sampling the winner.
   - Aggregated over N runs into per-team probabilities of winning the group,
     reaching each round, and lifting the trophy.
+- **Poisson scoreline model (stage 05, [`R/scorelines.R`](R/scorelines.R)):**
+  translates W/D/L probabilities into the exact scoreline format required by
+  SRF Tippspiel.
+  - Uses continuous **Elo ratings as predictors** rather than per-team dummy
+    variables. This avoids sparse-factor issues for WC teams with limited recent
+    history and generalises to any team with an Elo rating.
+  - A single symmetric Poisson GLM: `log(E[goals]) = α + β_att·elo_att +
+    β_def·elo_def + β_home·is_home`. Fitted on matches since `POISSON_MIN_DATE`
+    (= 2010) to focus on contemporary scoring patterns (~15,000 matches, 31,000
+    scorer-rows).
+  - For each fixture the model computes a `(MAX_GOALS+1)²` probability matrix
+    (default 6×6, covering 0–5 goals per side). The most-probable cell that
+    **falls in the W/D/L region predicted by XGBoost** is selected — the two
+    models are complementary, not competing.
+  - Coefficients from the 2026 fit: `β_att ≈ +0.002` (stronger attack → more
+    goals), `β_def ≈ −0.002` (stronger defence faced → fewer goals),
+    `β_home ≈ +0.24` (~27% more goals when playing at home). All highly
+    significant (|z| > 25).
 
 All knobs live in [`R/config.R`](R/config.R).
 
@@ -216,10 +294,11 @@ All knobs live in [`R/config.R`](R/config.R).
 
 ## Limitations & possible next steps
 
-- **No goal difference.** The model predicts W/D/L, not scorelines, so group
-  ties are broken by Elo rather than by FIFA's real goal-difference / goals-for
-  rules. A **Poisson goals model** (predict scorelines, then derive results and
-  proper tie-breakers) is the most valuable next step.
+- **No goal difference in the group-stage simulation.** The Poisson model in
+  stage 05 does predict scorelines, but the Monte-Carlo simulation (stage 04)
+  still uses W/D/L draws for speed. Integrating the Poisson scoreline draws
+  into the simulation would give proper goal-difference / goals-for tie-breakers
+  instead of the current Elo proxy.
 - **Third-place routing** uses a *valid* bipartite matching consistent with each
   slot's group-eligibility, not FIFA's exact published permutation table. This
   only affects which specific slot a third-placed team lands in, not which teams
@@ -232,7 +311,12 @@ All knobs live in [`R/config.R`](R/config.R).
   Conditioning the sim on known results is an easy refinement.
 - No player-level information (injuries, squad strength, line-ups); home
   advantage is 0 for all WC matches (host nations treated as neutral).
-- A reproducible environment lock (`renv`) would round out the project.
+- **SRF CSS selectors** in [`python_bot/submit_tips.py`](python_bot/submit_tips.py)
+  are placeholders — update them after inspecting the live page in DevTools.
+  The team-name matching between the CSV and the page uses case-insensitive
+  string comparison; extend `normalise_name()` if SRF uses abbreviations.
+- A reproducible environment lock (`renv` for R, `pip freeze` for Python) would
+  round out the project.
 
 ---
 

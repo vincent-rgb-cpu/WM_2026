@@ -23,7 +23,8 @@ FILES <- list(
   metrics         = file.path(PATHS$output, "evaluation_metrics.csv"),
   fixture_preds   = file.path(PATHS$output, "fixture_predictions.csv"),
   group_sim       = file.path(PATHS$output, "group_stage_simulation.csv"),
-  tournament_prob = file.path(PATHS$output, "tournament_probabilities.csv")
+  tournament_prob = file.path(PATHS$output, "tournament_probabilities.csv"),
+  srf_predictions = file.path(PATHS$output, "srf_predictions.csv")
 )
 
 # --- Data sources ------------------------------------------------------------
@@ -80,6 +81,15 @@ FEATURE_COLS <- c(
   "elo_home_pre", "elo_away_pre", "elo_diff", "home_adv",
   "form_pts_diff", "form_gf_diff", "form_ga_diff", "rest_diff"
 )
+
+# Minimum match date used to train the Poisson goals model. A tighter window
+# than the XGBoost TRAIN_START keeps the xG estimates focused on how teams
+# currently score/concede rather than their historical averages.
+POISSON_MIN_DATE <- as.Date("2010-01-01")
+
+# Maximum scoreline modelled by the Poisson matrix (0..MAX_GOALS per side).
+# A 6x6 grid (0-5) covers >99% of all international match scorelines.
+MAX_GOALS <- 5L
 
 # Monte-Carlo group-stage simulation (the quick group-only sim in script 03).
 SIM_N        <- 2000L

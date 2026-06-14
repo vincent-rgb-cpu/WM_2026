@@ -4,6 +4,16 @@ data/raw/
 data/processed/
 output/
 
+# --- Python automation ---
+# srg_session.json contains SRF authentication cookies — NEVER commit this.
+python_bot/srg_session.json
+python_bot/__pycache__/
+python_bot/*.pyc
+.pytest_cache/
+
+# --- Logs ---
+logs/
+
 # History files
 .Rhistory
 .Rapp.history
