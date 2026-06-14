@@ -113,6 +113,11 @@ jobs:
       - name: Stage 05 — Exact scorelines
         run: Rscript scripts/05_exact_scores.R
 
+      - name: Fetch real market odds
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: Rscript scripts/01c_fetch_real_odds.R
+
       - name: Stage 06 — Financial benchmark
         run: Rscript scripts/06_financial_benchmark.R
 

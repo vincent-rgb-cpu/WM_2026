@@ -25,7 +25,8 @@ FILES <- list(
   group_sim       = file.path(PATHS$output, "group_stage_simulation.csv"),
   tournament_prob = file.path(PATHS$output, "tournament_probabilities.csv"),
   srf_predictions = file.path(PATHS$output, "srf_predictions.csv"),
-  market_values   = file.path(PATHS$data_raw, "squad_market_values.csv")
+  market_values   = file.path(PATHS$data_raw, "squad_market_values.csv"),
+  real_odds       = file.path(PATHS$data_raw, "real_market_odds.csv")
 )
 
 # --- Data sources ------------------------------------------------------------

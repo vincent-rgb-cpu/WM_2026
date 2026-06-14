@@ -21,7 +21,7 @@ RSCRIPT = Rscript
 PYTHON  = python3
 
 .PHONY: all setup data train predict simulate simulate-n scorelines \
-        setup-python venv login submit dry-run pipeline lock clean mv
+        setup-python venv login submit dry-run pipeline lock clean mv odds benchmark dashboard
 
 # ── R pipeline ───────────────────────────────────────────────────────────────
 
@@ -33,6 +33,12 @@ setup:
 # Fetch squad market values from Transfermarkt (cached 7 days; run before `data`).
 mv:
 	$(RSCRIPT) scripts/01b_scrape_market_values.R
+
+# Fetch real pre-match h2h odds from The Odds API (cached 1 day; requires ODDS_API_KEY).
+# Run before `benchmark` to enable real-odds Kelly simulation.
+#   export ODDS_API_KEY=<your_key> && make odds
+odds:
+	$(RSCRIPT) scripts/01c_fetch_real_odds.R
 
 data:
 	$(RSCRIPT) scripts/01_build_dataset.R

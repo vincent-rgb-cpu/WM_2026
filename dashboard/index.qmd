@@ -199,10 +199,11 @@ if (!is.null(tourney)) {
 
 # Financial Simulation
 
-> **Methodology:** Bets placed on the model's highest-probability outcome for each
-> completed WC-2026 match. Bookmaker odds estimated as `model_prob / 1.05` (5 % margin).
-> Stake = Quarter-Kelly fraction of current bankroll, capped at 10 %.
-> This is a **simulation with estimated odds**, not a live trade log.
+> **Methodology:** A bet is placed on the model's highest-probability outcome when
+> (1) **real pre-match market odds** are available from The Odds API (preferred source: Pinnacle)
+> and (2) the model's **edge** — `model_prob − 1 / real_odds` — exceeds **3 %**.
+> Stake = Quarter-Kelly of current bankroll, capped at 10 %.
+> Matches without real odds are logged but excluded from the P&L simulation.
 
 ## Row {height=20%}
 
@@ -300,20 +301,22 @@ if (has_matches) {
   match_log %>%
     arrange(date) %>%
     mutate(
-      Score      = paste0(home_score, "–", away_score),
-      Predicted  = pred_result,
-      Actual     = actual_result,
+      Score       = paste0(home_score, "–", away_score),
+      Predicted   = pred_result,
+      Actual      = actual_result,
       `P(actual)` = round(p_actual, 3),
-      `Log-Loss` = round(log_loss, 3),
-      Correct    = if_else(correct, "✓", "✗"),
-      Edge       = percent(edge, 0.1),
-      Stake      = round(kelly_stake, 1),
-      Return     = round(bet_return, 1),
-      Bankroll   = round(bankroll, 1)
+      `Log-Loss`  = round(log_loss, 3),
+      Correct     = if_else(correct, "✓", "✗"),
+      Bookmaker   = if_else(is.na(bookmaker), "—", bookmaker),
+      Odds        = if_else(is.na(real_odds), "—", as.character(round(real_odds, 2))),
+      Edge        = if_else(is.na(edge), "—", percent(edge, 0.1)),
+      Stake       = round(kelly_stake, 1),
+      Return      = round(bet_return, 1),
+      Bankroll    = round(bankroll, 1)
     ) %>%
     select(Date = date, Home = home_team, Away = away_team, Score,
            Predicted, Actual, `P(actual)`, `Log-Loss`, Correct,
-           Edge, Stake, Return, Bankroll) %>%
+           Bookmaker, Odds, Edge, Stake, Return, Bankroll) %>%
     DT::datatable(
       options = list(pageLength = 16, dom = "tip", scrollX = TRUE),
       rownames = FALSE,
