@@ -194,40 +194,47 @@ def select_round(page, round_spec: str) -> None:
     # Give React time to finish mounting after networkidle.
     page.wait_for_timeout(1500)
 
-    # Debug: report element counts so failures are easy to diagnose.
-    for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
-        print(f"  [{sel}] found {page.locator(sel).count()} element(s)")
-
-    # For each selector try two trigger methods:
-    #   1. Regular click  — works when the element is directly interactable.
-    #   2. mousedown dispatch — react-select toggles its menu on mousedown, not
-    #      click, so a synthetic click sometimes goes unnoticed by the component.
     opened = False
-    for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
-        for method in ("click", "mousedown"):
-            try:
-                loc = page.locator(sel).first
-                if method == "click":
-                    loc.click(timeout=DROPDOWN_TIMEOUT_MS)
-                else:
-                    loc.dispatch_event("mousedown")
-                page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
-                print(f"  Dropdown opened via {method!r} on {sel!r}")
-                opened = True
+
+    # Approach 1: focus the hidden input inside the react-select control and
+    # press ArrowDown — the keyboard path that react-select always responds to,
+    # regardless of headless-mode click quirks.
+    try:
+        inp = page.locator("div[class*='-control'] input").first
+        inp.focus(timeout=DROPDOWN_TIMEOUT_MS)
+        page.keyboard.press("ArrowDown")
+        page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
+        print("  Dropdown opened via keyboard (ArrowDown on control input)")
+        opened = True
+    except (PlaywrightTimeout, Exception):
+        pass
+
+    # Approach 2: click / mousedown on each candidate selector.
+    if not opened:
+        for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
+            for method in ("click", "mousedown"):
+                try:
+                    loc = page.locator(sel).first
+                    if method == "click":
+                        loc.click(timeout=DROPDOWN_TIMEOUT_MS)
+                    else:
+                        loc.dispatch_event("mousedown")
+                    page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
+                    print(f"  Dropdown opened via {method!r} on {sel!r}")
+                    opened = True
+                    break
+                except (PlaywrightTimeout, Exception):
+                    continue
+            if opened:
                 break
-            except (PlaywrightTimeout, Exception):
-                continue
-        if opened:
-            break
 
     if not opened:
         shot = pathlib.Path(__file__).parent / "debug_round_dropdown.png"
         page.screenshot(path=str(shot))
         print(f"  Screenshot saved: {shot}")
         raise RoundNotFoundError(
-            "Round dropdown did not open. Tried selectors: "
-            + ", ".join(repr(s) for s in SEL_ROUND_DROPDOWN_CANDIDATES)
-            + f". Screenshot saved to {shot}"
+            "Round dropdown did not open after all attempts. "
+            f"Screenshot saved to {shot}"
         )
 
     options = page.locator(SEL_ROUND_OPTION).all()
