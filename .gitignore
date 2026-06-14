@@ -2,6 +2,8 @@
 # Cached downloads, processed datasets, trained models and result CSVs.
 data/raw/
 data/processed/
+# Fixtures JSON committed as CI fallback (worldcup26.ir unreachable from GitHub runners)
+!data/raw/wc2026_fixtures.json
 output/
 # Exception: benchmark outputs committed so GitHub Actions can read them
 # without re-running the full pipeline on every Pages build check.
