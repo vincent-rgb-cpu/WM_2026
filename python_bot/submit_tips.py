@@ -170,6 +170,18 @@ def fill_score(locator, value: int) -> None:
     time.sleep(AUTOSAVE_DEBOUNCE_S)
 
 
+def _dismiss_cookie_consent(page) -> None:
+    """Dismiss the Usercentrics cookie consent modal if it appears."""
+    try:
+        btn = page.locator("button:has-text('Alle akzeptieren')")
+        btn.wait_for(state="visible", timeout=4_000)
+        btn.click()
+        page.wait_for_timeout(800)
+        print("  Cookie consent dismissed.")
+    except PlaywrightTimeout:
+        pass  # modal not present — nothing to do
+
+
 def select_round(page, round_spec: str) -> None:
     """
     Open the round picker dropdown and click the option matching `round_spec`.
@@ -280,6 +292,8 @@ def submit_tips(df: pd.DataFrame, dry_run: bool = False,
 
         print(f"Opening {SRF_TIPS_URL} ...")
         page.goto(SRF_TIPS_URL, wait_until="networkidle", timeout=PAGE_LOAD_TIMEOUT_MS)
+
+        _dismiss_cookie_consent(page)
 
         if round_spec is not None:
             select_round(page, round_spec)
