@@ -307,9 +307,9 @@ if (has_matches) {
       `P(actual)` = round(p_actual, 3),
       `Log-Loss`  = round(log_loss, 3),
       Correct     = if_else(correct, "✓", "✗"),
-      Bookmaker   = if_else(is.na(bookmaker), "—", bookmaker),
-      Odds        = if_else(is.na(real_odds), "—", as.character(round(real_odds, 2))),
-      Edge        = if_else(is.na(edge), "—", percent(edge, 0.1)),
+      Bookmaker   = ifelse(is.na(bookmaker), "—", bookmaker),
+      Odds        = ifelse(is.na(real_odds), "—", as.character(round(real_odds, 2))),
+      Edge        = ifelse(is.na(edge), "—", paste0(round(edge * 100, 1), "%")),
       Stake       = round(kelly_stake, 1),
       Return      = round(bet_return, 1),
       Bankroll    = round(bankroll, 1)
