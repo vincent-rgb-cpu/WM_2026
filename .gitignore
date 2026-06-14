@@ -1,3 +1,9 @@
+# --- Project generated artefacts (reproducible via the pipeline) ---
+# Cached downloads, processed datasets, trained models and result CSVs.
+data/raw/
+data/processed/
+output/
+
 # History files
 .Rhistory
 .Rapp.history

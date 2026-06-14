@@ -1,0 +1,86 @@
+# =============================================================================
+# config.R  --  Central configuration for the WM 2026 prediction pipeline.
+#
+# All tunable constants, data-source URLs and on-disk paths live here so the
+# rest of the code never hard-codes a magic number. Pure values only: this
+# file must not call any helper that is defined in another module.
+# =============================================================================
+
+# --- On-disk layout (paths are relative to the project root) -----------------
+PATHS <- list(
+  data_raw       = "data/raw",
+  data_processed = "data/processed",
+  output         = "output",
+  models         = "output/models"
+)
+
+# Cached / produced artefacts
+FILES <- list(
+  fixtures_raw    = file.path(PATHS$data_raw, "wc2026_fixtures.json"),
+  historical_raw  = file.path(PATHS$data_raw, "international_results.csv"),
+  training_data   = file.path(PATHS$data_processed, "training_data.rds"),
+  model           = file.path(PATHS$models, "result_model.rds"),
+  metrics         = file.path(PATHS$output, "evaluation_metrics.csv"),
+  fixture_preds   = file.path(PATHS$output, "fixture_predictions.csv"),
+  group_sim       = file.path(PATHS$output, "group_stage_simulation.csv")
+)
+
+# --- Data sources ------------------------------------------------------------
+# WC 2026 fixtures + live results (JSON).
+FIXTURES_URL <- "https://worldcup26.ir/get/games"
+
+# Historical international results, 1872-present (martj42 mirror of the
+# well-known Kaggle dataset). Public, no authentication required.
+HISTORICAL_URL <-
+  "https://raw.githubusercontent.com/martj42/international_results/master/results.csv"
+
+# --- Modelling constants -----------------------------------------------------
+# Outcome classes, in a fixed order used everywhere (probability columns,
+# label encoding, evaluation). Always from the HOME team's perspective.
+RESULT_LEVELS <- c("home_win", "draw", "away_win")
+
+# Elo rating parameters (World-Football-Elo style).
+ELO_PARAMS <- list(
+  init_rating    = 1500,  # rating every team starts with
+  k              = 20,    # update step size
+  home_advantage = 65     # rating points added to the home side (0 if neutral)
+)
+
+# Rolling-form window: number of most recent matches used for form features.
+FORM_WINDOW <- 5L
+
+# Only matches on/after this date are used as ML *training rows*. Elo and form
+# are still warmed up on the full history before this cut-off.
+TRAIN_START <- as.Date("2006-01-01")
+
+# Time-based train/test split: matches before the cut-off train the model,
+# matches on/after it are the held-out test set.
+EVAL_CUTOFF <- as.Date("2021-01-01")
+
+# Recency weighting for training rows: weight = exp(-decay * days_before_latest).
+# ~0.00050/day => ~3.8-year half-life, so recent form counts more than 2008.
+RECENCY_DECAY <- 0.00050
+
+# xgboost hyper-parameters for the multiclass result model.
+XGB_PARAMS <- list(
+  objective        = "multi:softprob",
+  num_class        = length(RESULT_LEVELS),
+  eval_metric      = "mlogloss",
+  eta              = 0.08,
+  max_depth        = 4,
+  subsample        = 0.85,
+  colsample_bytree = 0.85,
+  min_child_weight = 5
+)
+XGB_NROUNDS <- 250L
+
+# Feature columns fed to the model (order matters; reused at predict time).
+FEATURE_COLS <- c(
+  "elo_home_pre", "elo_away_pre", "elo_diff", "home_adv",
+  "form_pts_diff", "form_gf_diff", "form_ga_diff", "rest_diff"
+)
+
+# Monte-Carlo group-stage simulation.
+SIM_N        <- 2000L
+SIM_SEED     <- 42L
+N_THIRDS_ADV <- 8L   # best 3rd-placed teams that advance (WC 2026 format)
