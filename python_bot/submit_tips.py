@@ -43,7 +43,7 @@ SEL_ROUND_DROPDOWN_CANDIDATES = [
     "div[class*='-control']",        # react-select control (hash class pattern)
     "[data-testid='dropdown']",      # dropdown-indicator chevron
 ]
-SEL_ROUND_OPTION    = ".select__option"                # options rendered after click
+SEL_ROUND_OPTION    = "div[class*='-option']"          # options rendered after dropdown opens
 
 # ── timing constants ─────────────────────────────────────────────────────────
 AUTOSAVE_DEBOUNCE_S  = 0.4      # wait after fill() for React's debounce to fire
