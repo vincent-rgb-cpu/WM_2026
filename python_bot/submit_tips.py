@@ -16,8 +16,11 @@ Usage:
 
 import argparse
 import pathlib
+import subprocess
 import sys
 import time
+import urllib.request
+import urllib.error
 from typing import Optional
 
 import pandas as pd
@@ -28,29 +31,19 @@ ROOT         = pathlib.Path(__file__).parent.parent
 PREDICTIONS  = ROOT / "output" / "srf_predictions.csv"
 SESSION_FILE = pathlib.Path(__file__).parent / "srg_session.json"
 SRF_TIPS_URL = "https://wmtippspiel.srf.ch/round"
+BRAVE_EXE    = "/Applications/Brave Browser 2.app/Contents/MacOS/Brave Browser"
+CDP_PORT     = 9222
 
 # ── CSS selectors (confirmed against live page 2026-06-14) ───────────────────
 SEL_MATCH_CARD      = "div.scoreBet"
 SEL_TEAM_NAME       = "h4.scoreBet__team__name"        # nth(0)=home, nth(1)=away
 SEL_SCORE_INP       = "input.scoreBet__pick__number"   # nth(0)=home, nth(1)=away
-SEL_BET_STATUS      = ".betStatus__value"              # "Tippen möglich" when open
-# Round picker selectors tried in order.
-# react-select renders hash-based classes (css-{hash}-control) with no stable
-# BEM name, so we match on the "-control" suffix pattern.
-# react-select toggles the menu on mousedown, not click, so we dispatch
-# mousedown as a fallback when a plain click doesn't open the options list.
-SEL_ROUND_DROPDOWN_CANDIDATES = [
-    "div[class*='-control']",        # react-select control (hash class pattern)
-    "[data-testid='dropdown']",      # dropdown-indicator chevron
-]
-SEL_ROUND_OPTION    = "div[class*='-option']"          # options rendered after dropdown opens
+SEL_BET_STATUS = ".betStatus__value"             # "Tippen möglich" when open
 
 # ── timing constants ─────────────────────────────────────────────────────────
-AUTOSAVE_DEBOUNCE_S  = 0.4      # wait after fill() for React's debounce to fire
+AUTOSAVE_DEBOUNCE_S  = 0.4   # wait after fill() for React's debounce to fire
 PAGE_LOAD_TIMEOUT_MS = 30_000
 CARD_WAIT_TIMEOUT_MS = 15_000
-DROPDOWN_TIMEOUT_MS  = 10_000
-OPTION_WAIT_TIMEOUT_MS = 5_000
 
 # ── exceptions ───────────────────────────────────────────────────────────────
 
@@ -182,103 +175,74 @@ def _dismiss_cookie_consent(page) -> None:
         pass  # modal not present — nothing to do
 
 
-def select_round(page, round_spec: str) -> None:
-    """
-    Open the round picker dropdown and click the option matching `round_spec`.
 
-    `round_spec` is matched as a case-insensitive substring, so "2" matches
-    "2.Runde", "Spieltag 2", "Round 2", etc.
-    """
-    print(f"Selecting round: {round_spec!r} ...")
+def _wait_for_cdp(port: int, timeout: int = 30) -> bool:
+    url = f"http://localhost:{port}/json/version"
+    for _ in range(timeout * 2):
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            return True
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.5)
+    return False
 
-    # Give React time to finish mounting after networkidle.
-    page.wait_for_timeout(1500)
 
-    # --- Check current round first -------------------------------------------
-    # If the singleValue element shows we're already on the right round, skip.
-    # If no round selector exists at all (page in past/future-round state),
-    # warn and return — the match scraper will handle 0 open cards gracefully.
-    single_val = page.locator("div[class*='-singleValue']")
-    if single_val.count() == 0:
-        print(f"  WARNING: round selector not found on page — proceeding with current view.")
-        return
-    current_text = single_val.first.inner_text().strip()
-    print(f"  Current round on page: {current_text!r}")
-    if round_spec.strip().lower() in current_text.lower():
-        print(f"  Already on correct round — no navigation needed.")
-        return
+def _fill_cards(page, lookup: dict, df: "pd.DataFrame",
+                dry_run: bool, label: str) -> None:
+    """Scrape all match cards on the current page and fill scores."""
+    cards = page.locator(SEL_MATCH_CARD).all()
+    print(f"Found {len(cards)} match card(s) on the page.\n")
 
-    # --- Open the dropdown ---------------------------------------------------
-    opened = False
+    submitted = skipped = closed = 0
 
-    # Approach 1: focus the hidden input and press ArrowDown (most reliable for
-    # react-select — keyboard events always reach the component).
-    try:
-        inp = page.locator("div[class*='-control'] input").first
-        inp.focus(timeout=DROPDOWN_TIMEOUT_MS)
-        page.keyboard.press("ArrowDown")
-        page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
-        print("  Dropdown opened via keyboard (ArrowDown)")
-        opened = True
-    except (PlaywrightTimeout, Exception):
-        pass
+    for card in cards:
+        status_el = card.locator(SEL_BET_STATUS)
+        if status_el.count() > 0:
+            if "möglich" not in status_el.first.inner_text():
+                closed += 1
+                continue
 
-    # Approach 2: click / mousedown on candidate selectors.
-    if not opened:
-        for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
-            for method in ("click", "mousedown"):
-                try:
-                    loc = page.locator(sel).first
-                    if method == "click":
-                        loc.click(timeout=DROPDOWN_TIMEOUT_MS)
-                    else:
-                        loc.dispatch_event("mousedown")
-                    page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
-                    print(f"  Dropdown opened via {method!r} on {sel!r}")
-                    opened = True
-                    break
-                except (PlaywrightTimeout, Exception):
-                    continue
-            if opened:
-                break
+        try:
+            name_els  = card.locator(SEL_TEAM_NAME).all()
+            home_page = name_els[0].inner_text().strip()
+            away_page = name_els[1].inner_text().strip()
+        except (PlaywrightTimeout, IndexError):
+            print("  SKIP: could not read team names from a card.")
+            skipped += 1
+            continue
 
-    if not opened:
-        shot = pathlib.Path(__file__).parent / "debug_round_dropdown.png"
-        page.screenshot(path=str(shot))
-        print(f"  Screenshot saved: {shot}")
-        raise RoundNotFoundError(
-            "Round dropdown did not open after all attempts. "
-            f"Screenshot saved to {shot}"
+        key = (normalise(home_page), normalise(away_page))
+        row = lookup.get(key)
+        if row is None:
+            print(f"  SKIP (no match): {home_page!r} vs {away_page!r}")
+            skipped += 1
+            continue
+
+        goals_home = int(row["Goals_A"])
+        goals_away = int(row["Goals_B"])
+        print(
+            f"  {label}{home_page} {goals_home}–{goals_away} {away_page}"
+            f"  (xG {row['xG_A']:.2f}–{row['xG_B']:.2f}, {row['WDL_pred']})"
         )
 
-    options = page.locator(SEL_ROUND_OPTION).all()
-    if not options:
-        raise RoundNotFoundError(
-            f"No round options found with selector {SEL_ROUND_OPTION!r}."
-        )
+        if not dry_run:
+            try:
+                inputs = card.locator(SEL_SCORE_INP).all()
+                fill_score(inputs[0], goals_home)
+                fill_score(inputs[1], goals_away)
+            except (PlaywrightTimeout, IndexError) as e:
+                print(f"    WARNING: Could not fill inputs — {e}")
+                skipped += 1
+                continue
 
-    # Print available options so the user always knows what names are on the page.
-    available = [o.inner_text().strip() for o in options]
-    print(f"  Available rounds: {available}")
+        submitted += 1
 
-    target = round_spec.strip().lower()
-    matched = next(
-        ((o, t) for o, t in zip(options, available) if target in t.lower()),
-        None
+    print(
+        f"\n{label}Done.  "
+        f"Submitted: {submitted}  |  "
+        f"Betting closed: {closed}  |  "
+        f"Skipped: {skipped}"
     )
-
-    if matched is None:
-        raise RoundNotFoundError(
-            f"Round {round_spec!r} not found. Available: {available}"
-        )
-
-    opt, text = matched
-    print(f"  Clicking: {text!r}")
-    opt.click()
-    # SPA: round change is a React re-render, not a page navigation.
-    # Wait for match cards to appear instead of networkidle.
-    page.wait_for_selector(SEL_MATCH_CARD, timeout=CARD_WAIT_TIMEOUT_MS)
-    print(f"  Round {text!r} loaded.")
 
 
 def load_predictions() -> pd.DataFrame:
@@ -294,109 +258,67 @@ def load_predictions() -> pd.DataFrame:
 
 def submit_tips(df: pd.DataFrame, dry_run: bool = False,
                 round_spec: Optional[str] = None) -> None:
-    if not SESSION_FILE.exists():
-        raise SessionExpiredError(
-            f"{SESSION_FILE} not found. "
-            "Run `python3 python_bot/setup_login.py` first."
-        )
-
-    label = "[DRY RUN] " if dry_run else ""
-
-    # Build a lookup: (german_home, german_away) -> prediction row
+    label  = "[DRY RUN] " if dry_run else ""
     lookup = {
         (normalise(to_german(r["Team_A"])), normalise(to_german(r["Team_B"]))): r
         for _, r in df.iterrows()
     }
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(storage_state=str(SESSION_FILE))
-        page    = context.new_page()
+    if round_spec is not None:
+        # ── Interactive mode ──────────────────────────────────────────────────
+        # Launch Brave, let the user navigate to the correct round, then
+        # connect via CDP and fill predictions. No headless automation of
+        # the round selector — the user does it in a real browser window.
+        if not pathlib.Path(BRAVE_EXE).exists():
+            raise ConfigError(f"Brave not found at {BRAVE_EXE}")
 
-        print(f"Opening {SRF_TIPS_URL} ...")
-        page.goto(SRF_TIPS_URL, wait_until="networkidle", timeout=PAGE_LOAD_TIMEOUT_MS)
+        print(f"Launching Brave Browser ...")
+        subprocess.Popen(
+            [BRAVE_EXE, f"--remote-debugging-port={CDP_PORT}", SRF_TIPS_URL],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        if not _wait_for_cdp(CDP_PORT):
+            raise BotError(f"Brave did not start CDP on port {CDP_PORT} within 30s.")
 
-        _dismiss_cookie_consent(page)
+        print()
+        print(f"  Brave is open at {SRF_TIPS_URL}")
+        print(f"  → Navigate to round {round_spec!r} in the browser.")
+        input("  → Press ENTER when you are on the correct round ... ")
+        print()
 
-        if round_spec is not None:
-            select_round(page, round_spec)
+        with sync_playwright() as p:
+            browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+            page    = browser.contexts[0].pages[0]
+            _fill_cards(page, lookup, df, dry_run, label)
 
-        try:
-            page.wait_for_selector(SEL_MATCH_CARD, timeout=CARD_WAIT_TIMEOUT_MS)
-        except PlaywrightTimeout:
-            if round_spec is not None:
-                # Betting for this round may not be open yet — not a session error.
-                print("  No match cards found for this round (betting may not be open yet).")
-            else:
+    else:
+        # ── Headless mode (current round) ─────────────────────────────────────
+        if not SESSION_FILE.exists():
+            raise SessionExpiredError(
+                f"{SESSION_FILE} not found. "
+                "Run `python3 python_bot/setup_login.py` first."
+            )
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(storage_state=str(SESSION_FILE))
+            page    = context.new_page()
+
+            print(f"Opening {SRF_TIPS_URL} ...")
+            page.goto(SRF_TIPS_URL, wait_until="networkidle",
+                      timeout=PAGE_LOAD_TIMEOUT_MS)
+            _dismiss_cookie_consent(page)
+
+            try:
+                page.wait_for_selector(SEL_MATCH_CARD, timeout=CARD_WAIT_TIMEOUT_MS)
+            except PlaywrightTimeout:
                 raise SessionExpiredError(
                     "No match cards found — session may have expired. "
                     "Re-run setup_login.py to refresh srg_session.json."
                 )
 
-        cards = page.locator(SEL_MATCH_CARD).all()
-        print(f"Found {len(cards)} match card(s) on the page.\n")
-
-        submitted = skipped = closed = 0
-
-        for card in cards:
-            # ── skip if betting window is closed for this match ───────────
-            status_el = card.locator(SEL_BET_STATUS)
-            if status_el.count() > 0:
-                status_text = status_el.first.inner_text()
-                if "möglich" not in status_text:
-                    closed += 1
-                    continue   # betting period over for this game
-
-            # ── read team names from the page ─────────────────────────────
-            try:
-                name_els   = card.locator(SEL_TEAM_NAME).all()
-                home_page  = name_els[0].inner_text().strip()
-                away_page  = name_els[1].inner_text().strip()
-            except (PlaywrightTimeout, IndexError):
-                print("  SKIP: could not read team names from a card.")
-                skipped += 1
-                continue
-
-            # ── look up matching prediction row ───────────────────────────
-            key = (normalise(home_page), normalise(away_page))
-            row = lookup.get(key)
-
-            if row is None:
-                # Team names didn't match — likely a missing German translation.
-                # Add the pair to EN_TO_DE at the top of this file to fix it.
-                print(f"  SKIP (no match): {home_page!r} vs {away_page!r}")
-                print(f"         CSV has: {list(df['Team_A'][:3])} ...")
-                skipped += 1
-                continue
-
-            goals_home = int(row["Goals_A"])
-            goals_away = int(row["Goals_B"])
-            print(
-                f"  {label}{home_page} {goals_home}–{goals_away} {away_page}"
-                f"  (xG {row['xG_A']:.2f}–{row['xG_B']:.2f}, {row['WDL_pred']})"
-            )
-
-            if dry_run:
-                submitted += 1
-                continue
-
-            # ── fill both score inputs ────────────────────────────────────
-            try:
-                inputs = card.locator(SEL_SCORE_INP).all()
-                fill_score(inputs[0], goals_home)
-                fill_score(inputs[1], goals_away)
-                submitted += 1
-            except (PlaywrightTimeout, IndexError) as e:
-                print(f"    WARNING: Could not fill inputs — {e}")
-                skipped += 1
-
-        print(
-            f"\n{label}Done.  "
-            f"Submitted: {submitted}  |  "
-            f"Betting closed: {closed}  |  "
-            f"Skipped: {skipped}"
-        )
-        browser.close()
+            _fill_cards(page, lookup, df, dry_run, label)
+            browser.close()
 
 
 def parse_args() -> argparse.Namespace:
