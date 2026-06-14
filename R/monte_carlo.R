@@ -43,6 +43,7 @@ precompute_match_probs <- function(model, teams, ratings, team_form) {
   grid$date     <- Sys.Date()
   grid$group    <- NA_character_
   grid$stage    <- "ko"
+  grid$neutral  <- TRUE   # hypothetical KO matchups have no home venue
 
   pr  <- predict_fixtures(model, grid, ratings, team_form)
   idx <- setNames(seq_len(n), teams)

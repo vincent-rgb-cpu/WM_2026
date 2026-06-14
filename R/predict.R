@@ -28,6 +28,8 @@ predict_fixtures <- function(model, fixtures, ratings, team_form,
   mv     <- load_market_values()
   mv_log <- function(t) { v <- mv[t]; ifelse(is.na(v) | v <= 0, NA_real_, log(v)) }
 
+  if (!"neutral" %in% names(fixtures)) fixtures$neutral <- TRUE
+
   fx <- fixtures %>%
     rowwise() %>%
     mutate(
