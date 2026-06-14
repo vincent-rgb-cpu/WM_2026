@@ -11,6 +11,8 @@ output/
 !output/financial_benchmark.csv
 !output/evaluation_metrics.csv
 !output/tournament_probabilities.csv
+!output/scoreline_predictions.csv
+!output/fixture_predictions.csv
 
 # --- Python automation (local-only, not tracked in git) ---
 python_bot/

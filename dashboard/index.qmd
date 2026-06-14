@@ -44,6 +44,11 @@ fixture_preds <- tryCatch(
                   show_col_types = FALSE),
   error = function(e) NULL
 )
+scoreline_preds <- tryCatch(
+  readr::read_csv(file.path(ROOT, "output/scoreline_predictions.csv"),
+                  show_col_types = FALSE),
+  error = function(e) NULL
+)
 
 has_matches <- !is.null(match_log) && nrow(match_log) > 0
 has_pnl     <- !is.null(pnl)       && nrow(pnl) > 1
@@ -136,7 +141,25 @@ if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
     filter(!(match_id %in% played_ids)) %>%
     arrange(date)
 
+  # Join Poisson scoreline predictions if available
+  if (!is.null(scoreline_preds) && nrow(scoreline_preds) > 0) {
+    score_join <- scoreline_preds %>%
+      transmute(
+        date      = as.character(Match_Date),
+        home_team = Team_A,
+        away_team = Team_B,
+        Score     = paste0(Goals_A, "–", Goals_B)
+      )
+    upcoming_all <- upcoming_all %>%
+      mutate(date = as.character(date)) %>%
+      left_join(score_join, by = c("date", "home_team", "away_team"))
+  } else {
+    upcoming_all$Score <- NA_character_
+  }
+
   if (nrow(upcoming_all) > 0) {
+    has_scores <- any(!is.na(upcoming_all$Score))
+
     pred_df <- upcoming_all %>%
       rowwise() %>%
       mutate(
@@ -154,8 +177,18 @@ if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
         `P(D)` = round(p_draw     * 100, 1),
         `P(A)` = round(p_away_win * 100, 1)
       ) %>%
-      ungroup() %>%
-      select(Date, Stage, Home, Away, `P(H)`, `P(D)`, `P(A)`, Pick)
+      ungroup()
+
+    col_order <- if (has_scores)
+      c("Date", "Stage", "Home", "Score", "Away", "P(H)", "P(D)", "P(A)", "Pick")
+    else
+      c("Date", "Stage", "Home", "Away", "P(H)", "P(D)", "P(A)", "Pick")
+
+    pred_df <- pred_df %>% select(all_of(col_order))
+
+    # Column index positions (0-based for DT)
+    prob_cols    <- if (has_scores) c(5, 6, 7) else c(4, 5, 6)
+    center_cols  <- if (has_scores) c(0, 1, 3, 5, 6, 7) else c(0, 1, 4, 5, 6)
 
     DT::datatable(
       pred_df,
@@ -166,9 +199,9 @@ if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
         dom        = "tip",
         scrollX    = TRUE,
         columnDefs = list(
-          list(className = "dt-center", targets = c(0, 1, 4, 5, 6)),
-          list(width = "22%", targets = c(2, 3)),
-          list(width = "7%",  targets = c(4, 5, 6))
+          list(className = "dt-center", targets = center_cols),
+          list(width = "20%", targets = c(2, if (has_scores) 4L else 3L)),
+          list(width = "7%",  targets = prob_cols)
         )
       ),
       class = "table-dark table-sm table-hover"
@@ -195,7 +228,11 @@ if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
         backgroundPosition = "center"
       ) %>%
       DT::formatStyle("Pick", fontWeight = "bold", color = "#28a745") %>%
-      DT::formatStyle(c("P(H)", "P(D)", "P(A)"), color = "#e0e0e0")
+      DT::formatStyle(c("P(H)", "P(D)", "P(A)"), color = "#e0e0e0") %>%
+      { if (has_scores)
+          DT::formatStyle(., "Score", fontWeight = "bold",
+                          textAlign = "center", fontSize = "1.05em")
+        else . }
   } else {
     cat("All fixtures have been played — check the Financial Simulation tab for results.")
   }
