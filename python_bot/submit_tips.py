@@ -176,6 +176,14 @@ def select_round(page, round_spec: str) -> None:
     """
     print(f"Selecting round: {round_spec!r} ...")
 
+    # Give React time to mount the select component after networkidle.
+    page.wait_for_timeout(1500)
+
+    # Debug: report how many elements each selector finds.
+    for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
+        n = page.locator(sel).count()
+        print(f"  [{sel}] found {n} element(s)")
+
     # Try each candidate selector with force=True (bypasses Playwright's
     # actionability checks — useful when the element is rendered but partially
     # obscured or not yet in the viewport).
@@ -203,10 +211,20 @@ def select_round(page, round_spec: str) -> None:
                 continue
 
     if not opened:
+        # Save a screenshot so we can see exactly what's on the page.
+        shot = pathlib.Path(__file__).parent / "debug_round_dropdown.png"
+        page.screenshot(path=str(shot))
+        print(f"  Screenshot saved: {shot}")
+        # Dump all class names present on the page for selector debugging.
+        classes = page.evaluate(
+            "() => [...new Set([...document.querySelectorAll('[class]')]"
+            ".map(e => e.className).join(' ').split(/\\s+/).filter(Boolean))].sort()"
+        )
+        print(f"  Classes on page: {classes[:60]}")
         raise RoundNotFoundError(
             "Round dropdown did not open. Tried selectors: "
             + ", ".join(repr(s) for s in SEL_ROUND_DROPDOWN_CANDIDATES)
-            + ". Check the page with DevTools and update SEL_ROUND_DROPDOWN_CANDIDATES."
+            + f". Screenshot saved to {shot}"
         )
 
     options = page.locator(SEL_ROUND_OPTION).all()
