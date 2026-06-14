@@ -61,6 +61,11 @@ parse_fixtures <- function(raw) {
     stage      = pull("type"),       # group / r32 / r16 / qf / sf / third / final
     group      = pull("group"),
     matchday   = to_num(pull("matchday")),
+    # Bracket routing for knockout games (NA for group games), e.g.
+    # "Winner Group E", "Runner-up Group A", "3rd Group A/B/C/D/F",
+    # "Winner Match 74". These define the official FIFA 2026 bracket.
+    home_label = pull("home_team_label"),
+    away_label = pull("away_team_label"),
     # World Cup matches are played at neutral venues (host advantage ignored).
     neutral    = TRUE
   )

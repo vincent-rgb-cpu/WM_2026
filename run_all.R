@@ -9,4 +9,5 @@
 source("scripts/01_build_dataset.R")
 source("scripts/02_train_evaluate.R")
 source("scripts/03_predict_tournament.R")
+source("scripts/04_simulate.R")
 cat("\nPipeline complete. See the output/ directory for results.\n")

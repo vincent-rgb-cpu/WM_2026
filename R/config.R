@@ -22,7 +22,8 @@ FILES <- list(
   model           = file.path(PATHS$models, "result_model.rds"),
   metrics         = file.path(PATHS$output, "evaluation_metrics.csv"),
   fixture_preds   = file.path(PATHS$output, "fixture_predictions.csv"),
-  group_sim       = file.path(PATHS$output, "group_stage_simulation.csv")
+  group_sim       = file.path(PATHS$output, "group_stage_simulation.csv"),
+  tournament_prob = file.path(PATHS$output, "tournament_probabilities.csv")
 )
 
 # --- Data sources ------------------------------------------------------------
@@ -80,7 +81,10 @@ FEATURE_COLS <- c(
   "form_pts_diff", "form_gf_diff", "form_ga_diff", "rest_diff"
 )
 
-# Monte-Carlo group-stage simulation.
+# Monte-Carlo group-stage simulation (the quick group-only sim in script 03).
 SIM_N        <- 2000L
 SIM_SEED     <- 42L
 N_THIRDS_ADV <- 8L   # best 3rd-placed teams that advance (WC 2026 format)
+
+# Full tournament Monte-Carlo (script 04: groups -> knockout -> final).
+TOURNAMENT_SIM_N <- 10000L
