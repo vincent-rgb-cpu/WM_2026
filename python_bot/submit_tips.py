@@ -34,11 +34,14 @@ SEL_MATCH_CARD      = "div.scoreBet"
 SEL_TEAM_NAME       = "h4.scoreBet__team__name"        # nth(0)=home, nth(1)=away
 SEL_SCORE_INP       = "input.scoreBet__pick__number"   # nth(0)=home, nth(1)=away
 SEL_BET_STATUS      = ".betStatus__value"              # "Tippen möglich" when open
-# Round picker: try the whole select control first (most reliably clickable),
-# then fall back to the dropdown-indicator chevron.
+# Round picker selectors tried in order.
+# react-select renders hash-based classes (css-{hash}-control) with no stable
+# BEM name, so we match on the "-control" suffix pattern.
+# react-select toggles the menu on mousedown, not click, so we dispatch
+# mousedown as a fallback when a plain click doesn't open the options list.
 SEL_ROUND_DROPDOWN_CANDIDATES = [
-    ".select__control",              # entire select box — preferred click target
-    "[data-testid='dropdown']",      # inner chevron indicator
+    "div[class*='-control']",        # react-select control (hash class pattern)
+    "[data-testid='dropdown']",      # dropdown-indicator chevron
 ]
 SEL_ROUND_OPTION    = ".select__option"                # options rendered after click
 
@@ -176,51 +179,39 @@ def select_round(page, round_spec: str) -> None:
     """
     print(f"Selecting round: {round_spec!r} ...")
 
-    # Give React time to mount the select component after networkidle.
+    # Give React time to finish mounting after networkidle.
     page.wait_for_timeout(1500)
 
-    # Debug: report how many elements each selector finds.
+    # Debug: report element counts so failures are easy to diagnose.
     for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
-        n = page.locator(sel).count()
-        print(f"  [{sel}] found {n} element(s)")
+        print(f"  [{sel}] found {page.locator(sel).count()} element(s)")
 
-    # Try each candidate selector with force=True (bypasses Playwright's
-    # actionability checks — useful when the element is rendered but partially
-    # obscured or not yet in the viewport).
+    # For each selector try two trigger methods:
+    #   1. Regular click  — works when the element is directly interactable.
+    #   2. mousedown dispatch — react-select toggles its menu on mousedown, not
+    #      click, so a synthetic click sometimes goes unnoticed by the component.
     opened = False
     for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
-        try:
-            page.locator(sel).first.click(force=True, timeout=DROPDOWN_TIMEOUT_MS)
-            page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
-            print(f"  Dropdown opened via {sel!r}")
-            opened = True
-            break
-        except PlaywrightTimeout:
-            continue
-
-    # Last resort: fire a raw JS click on each candidate.
-    if not opened:
-        for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
+        for method in ("click", "mousedown"):
             try:
-                page.evaluate(f"document.querySelector({sel!r})?.click()")
+                loc = page.locator(sel).first
+                if method == "click":
+                    loc.click(timeout=DROPDOWN_TIMEOUT_MS)
+                else:
+                    loc.dispatch_event("mousedown")
                 page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
-                print(f"  Dropdown opened via JS click on {sel!r}")
+                print(f"  Dropdown opened via {method!r} on {sel!r}")
                 opened = True
                 break
-            except PlaywrightTimeout:
+            except (PlaywrightTimeout, Exception):
                 continue
+        if opened:
+            break
 
     if not opened:
-        # Save a screenshot so we can see exactly what's on the page.
         shot = pathlib.Path(__file__).parent / "debug_round_dropdown.png"
         page.screenshot(path=str(shot))
         print(f"  Screenshot saved: {shot}")
-        # Dump all class names present on the page for selector debugging.
-        classes = page.evaluate(
-            "() => [...new Set([...document.querySelectorAll('[class]')]"
-            ".map(e => e.className).join(' ').split(/\\s+/).filter(Boolean))].sort()"
-        )
-        print(f"  Classes on page: {classes[:60]}")
         raise RoundNotFoundError(
             "Round dropdown did not open. Tried selectors: "
             + ", ".join(repr(s) for s in SEL_ROUND_DROPDOWN_CANDIDATES)
