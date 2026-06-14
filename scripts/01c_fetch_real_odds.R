@@ -45,7 +45,8 @@ ODDS_NAME_MAP <- c(
 )
 
 canonicalize <- function(name) {
-  mapped <- ODDS_NAME_MAP[[name]]   # [[ ]] returns NULL (not named-NA) when absent
+  if (is.na(name) || !nzchar(name)) return(name)
+  mapped <- ODDS_NAME_MAP[[name]]   # NULL when absent, not a named-NA
   if (is.null(mapped)) name else mapped
 }
 
@@ -136,6 +137,11 @@ parse_event <- function(ev) {
   home_api <- ev$home_team
   away_api <- ev$away_team
   books    <- ev$bookmakers
+
+  # Skip TBD knockout slots (empty or missing team name)
+  if (is.null(home_api) || is.null(away_api) ||
+      is.na(home_api)   || is.na(away_api)   ||
+      !nzchar(home_api) || !nzchar(away_api)) return(NULL)
 
   if (length(books) == 0L) return(NULL)
 
