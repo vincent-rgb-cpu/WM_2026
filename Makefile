@@ -60,12 +60,14 @@ login:
 	$(PYTHON) python_bot/setup_login.py
 
 # Submit predictions to SRF Tippspiel (requires srg_session.json).
+# Optional: make submit ROUND=3
 submit:
-	$(PYTHON) python_bot/submit_tips.py
+	$(PYTHON) python_bot/submit_tips.py $(if $(ROUND),--round $(ROUND),)
 
 # Test selector matching without writing anything to the page.
+# Optional: make dry-run ROUND=3
 dry-run:
-	$(PYTHON) python_bot/submit_tips.py --dry-run
+	$(PYTHON) python_bot/submit_tips.py --dry-run $(if $(ROUND),--round $(ROUND),)
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 

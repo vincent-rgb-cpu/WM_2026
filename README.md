@@ -98,17 +98,16 @@ make login
 #   → A browser window opens. Log in manually, then press ENTER in the terminal.
 #   → python_bot/srg_session.json is created (git-ignored — never commit it).
 
-# 3. Submit predictions (headless, safe to automate)
+# 3. Submit predictions for the current round (headless, safe to automate)
 make submit
 
-# 4. Test selector matching without writing anything to the page
-make dry-run
-```
+# 4. Submit for a specific round (e.g. Spieltag 3)
+make submit ROUND=3
 
-> **Before running `make submit`:** update the CSS selector constants at the
-> top of [`python_bot/submit_tips.py`](python_bot/submit_tips.py) with the real
-> values from the SRF Tippspiel page. The file contains a detailed guide on how
-> to find them with browser DevTools.
+# 5. Test selector matching without writing anything to the page
+make dry-run
+make dry-run ROUND=3
+```
 
 ### Fully automated (cron)
 
@@ -312,9 +311,9 @@ All knobs live in [`R/config.R`](R/config.R).
 - No player-level information (injuries, squad strength, line-ups); home
   advantage is 0 for all WC matches (host nations treated as neutral).
 - **SRF CSS selectors** in [`python_bot/submit_tips.py`](python_bot/submit_tips.py)
-  are placeholders — update them after inspecting the live page in DevTools.
-  The team-name matching between the CSV and the page uses case-insensitive
-  string comparison; extend `normalise_name()` if SRF uses abbreviations.
+  were confirmed against the live page (2026-06-14): `div.scoreBet`,
+  `h4.scoreBet__team__name`, `input.scoreBet__pick__number`. If SRF updates
+  their frontend, re-inspect with DevTools and update the `SEL_*` constants.
 - A reproducible environment lock (`renv` for R, `pip freeze` for Python) would
   round out the project.
 

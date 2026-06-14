@@ -8,8 +8,10 @@ session, and fills in every predicted scoreline on wmtippspiel.srf.ch/round.
 Scores are auto-saved by the page on every input — there is no submit button.
 
 Usage:
-    python3 python_bot/submit_tips.py            # fill and auto-save all tips
-    python3 python_bot/submit_tips.py --dry-run  # read-only, nothing is written
+    python3 python_bot/submit_tips.py                   # current round
+    python3 python_bot/submit_tips.py --round 3         # select round 3
+    python3 python_bot/submit_tips.py --dry-run         # read-only
+    python3 python_bot/submit_tips.py --round 3 --dry-run
 """
 
 import argparse
@@ -26,10 +28,12 @@ SESSION_FILE = pathlib.Path(__file__).parent / "srg_session.json"
 SRF_TIPS_URL = "https://wmtippspiel.srf.ch/round"
 
 # ── confirmed CSS selectors (inspected 2026-06-14) ───────────────────────────
-SEL_MATCH_CARD = "div.scoreBet"
-SEL_TEAM_NAME  = "h4.scoreBet__team__name"       # nth(0)=home, nth(1)=away
-SEL_SCORE_INP  = "input.scoreBet__pick__number"  # nth(0)=home, nth(1)=away
-SEL_BET_STATUS = ".betStatus__value"             # contains "Tippen möglich" when open
+SEL_MATCH_CARD      = "div.scoreBet"
+SEL_TEAM_NAME       = "h4.scoreBet__team__name"        # nth(0)=home, nth(1)=away
+SEL_SCORE_INP       = "input.scoreBet__pick__number"   # nth(0)=home, nth(1)=away
+SEL_BET_STATUS      = ".betStatus__value"              # "Tippen möglich" when open
+SEL_ROUND_DROPDOWN  = "[data-testid='dropdown']"       # chevron that opens round picker
+SEL_ROUND_OPTION    = ".select__option"                # options rendered after click
 
 # ── English → German team name translation ────────────────────────────────────
 # SRF shows German names; our CSV uses English. Add any missing team here.
@@ -134,6 +138,54 @@ def fill_score(locator, value: int) -> None:
     time.sleep(0.4)   # give the auto-save debounce time to fire
 
 
+def select_round(page, round_spec: str) -> None:
+    """
+    Open the round picker dropdown and click the option matching `round_spec`.
+
+    `round_spec` can be:
+      - a plain integer string, e.g. "3"  → matches any option whose text contains "3"
+      - a label substring, e.g. "Spieltag 3" → matched case-insensitively
+    """
+    print(f"Selecting round: {round_spec!r} ...")
+
+    try:
+        # Click the chevron/dropdown indicator to open the picker
+        page.locator(SEL_ROUND_DROPDOWN).first.click(timeout=10_000)
+        page.wait_for_selector(SEL_ROUND_OPTION, timeout=5_000)
+    except PlaywrightTimeout:
+        sys.exit(
+            "ERROR: Round dropdown did not open.\n"
+            f"  selector tried: {SEL_ROUND_DROPDOWN}\n"
+            "  Check that SEL_ROUND_DROPDOWN still matches the page."
+        )
+
+    options = page.locator(SEL_ROUND_OPTION).all()
+    if not options:
+        sys.exit(f"ERROR: No round options found with selector {SEL_ROUND_OPTION!r}.")
+
+    target = round_spec.strip().lower()
+    matched = None
+    for opt in options:
+        text = opt.inner_text().strip()
+        if target in text.lower():
+            matched = (opt, text)
+            break
+
+    if matched is None:
+        available = [o.inner_text().strip() for o in options]
+        sys.exit(
+            f"ERROR: Round {round_spec!r} not found in dropdown.\n"
+            f"  Available options: {available}"
+        )
+
+    opt, text = matched
+    print(f"  Clicking round option: {text!r}")
+    opt.click()
+    # Wait for the page to reload match cards for the selected round
+    page.wait_for_load_state("networkidle", timeout=15_000)
+    print(f"  Round {text!r} loaded.")
+
+
 def load_predictions() -> pd.DataFrame:
     if not PREDICTIONS.exists():
         sys.exit(
@@ -145,7 +197,7 @@ def load_predictions() -> pd.DataFrame:
     return df
 
 
-def submit_tips(df: pd.DataFrame, dry_run: bool = False) -> None:
+def submit_tips(df: pd.DataFrame, dry_run: bool = False, round_spec: str | None = None) -> None:
     if not SESSION_FILE.exists():
         sys.exit(
             f"ERROR: {SESSION_FILE} not found.\n"
@@ -167,6 +219,9 @@ def submit_tips(df: pd.DataFrame, dry_run: bool = False) -> None:
 
         print(f"Opening {SRF_TIPS_URL} ...")
         page.goto(SRF_TIPS_URL, wait_until="networkidle", timeout=30_000)
+
+        if round_spec is not None:
+            select_round(page, round_spec)
 
         try:
             page.wait_for_selector(SEL_MATCH_CARD, timeout=15_000)
@@ -246,10 +301,12 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Submit WC-2026 tips to SRF Tippspiel.")
     p.add_argument("--dry-run", action="store_true",
                    help="Navigate and match but do NOT fill or save anything.")
+    p.add_argument("--round", metavar="ROUND",
+                   help="Round to navigate to before submitting, e.g. '3' or 'Spieltag 3'.")
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args  = parse_args()
     preds = load_predictions()
-    submit_tips(preds, dry_run=args.dry_run)
+    submit_tips(preds, dry_run=args.dry_run, round_spec=args.round)
