@@ -39,11 +39,27 @@ compute_elo <- function(matches, params = ELO_PARAMS) {
 
     if (is.na(hs[i]) || is.na(as_[i])) next  # unplayed -> no rating change
 
-    gd  <- abs(hs[i] - as_[i])
-    g   <- if (gd <= 1) 1 else if (gd == 2) 1.5
-           else if (gd == 3) 1.75 else 1.75 + (gd - 3) / 8   # goal-diff weight
-    res <- if (hs[i] > as_[i]) 1 else if (hs[i] == as_[i]) 0.5 else 0
-    d   <- params$k * g * (res - exp_h)
+    gd      <- abs(hs[i] - as_[i])
+    home_w  <- hs[i] > as_[i]
+    home_l  <- hs[i] < as_[i]
+    res     <- if (home_w) 1 else if (home_l) 0 else 0.5
+
+    # MoV multiplier (log-scale, continuous):
+    #   gd 0→1 | gd 1→1 | gd 2→1.58 | gd 3→2 | gd 4→2.32 | gd 5→2.58
+    # For draws (gd=0) g=1 and autocorr is skipped (no winner to reference).
+    g <- if (gd == 0L) {
+      1
+    } else {
+      g_base <- log2(gd + 1)   # log base-2 keeps gd=1 anchored at 1.0
+
+      # Autocorrelation correction (FiveThirtyEight SPI):
+      # dominant wins over weak opponents earn LESS extra credit;
+      # upsets earn MORE. winner_delta > 0 means the winner was already favoured.
+      winner_delta <- if (home_w) (rh + adv) - ra else ra - (rh + adv)
+      g_base * (2.2 / (winner_delta * 0.001 + 2.2))
+    }
+
+    d <- params$k * g * (res - exp_h)
 
     ratings[[ht[i]]] <- rh + d
     ratings[[at[i]]] <- ra - d
@@ -88,7 +104,13 @@ add_form_features <- function(matches, window = FORM_WINDOW) {
       form_pts  = .roll_prev_mean(pts, window),
       form_gf   = .roll_prev_mean(gf,  window),
       form_ga   = .roll_prev_mean(ga,  window),
-      days_rest = as.numeric(date - dplyr::lag(date))
+      days_rest = {
+        raw <- as.numeric(date - dplyr::lag(date))
+        # First match per team has no lag → NA.
+        # Impute with that team's own median rest interval; fall back to 14 days
+        # for teams whose entire history in this dataset is a single match.
+        dplyr::coalesce(raw, median(raw, na.rm = TRUE), 14)
+      }
     ) %>%
     ungroup()
 
@@ -114,7 +136,12 @@ build_features <- function(matches, params = ELO_PARAMS) {
   elo     <- compute_elo(matches, params)
   matches <- add_form_features(elo$matches)
 
+  # Anchor recency weights to WC_START rather than the latest row in training
+  # data. Before the WC this equals the latest training date; once the WC
+  # begins, the anchor is fixed so adding new results doesn't silently
+  # re-weight every historical match.
   latest_date <- max(matches$date, na.rm = TRUE)
+  ref_date    <- max(latest_date, WC_START)
   mv          <- load_market_values()
   mv_log      <- function(team) {
     v <- mv[team]
@@ -137,7 +164,7 @@ build_features <- function(matches, params = ELO_PARAMS) {
       form_gf_diff  = home_form_gf  - away_form_gf,
       form_ga_diff  = home_form_ga  - away_form_ga,
       rest_diff     = pmin(home_days_rest, 365) - pmin(away_days_rest, 365),
-      sample_weight = exp(-RECENCY_DECAY * as.numeric(latest_date - date)),
+      sample_weight = exp(-RECENCY_DECAY * as.numeric(ref_date - date)),
       log_mv_home   = mv_log(home_team),
       log_mv_away   = mv_log(away_team)
     )

@@ -61,9 +61,12 @@ TRAIN_START <- as.Date("2006-01-01")
 # matches on/after it are the held-out test set.
 EVAL_CUTOFF <- as.Date("2021-01-01")
 
-# Recency weighting for training rows: weight = exp(-decay * days_before_latest).
+# Recency weighting for training rows: weight = exp(-decay * days_before_ref).
 # ~0.00050/day => ~3.8-year half-life, so recent form counts more than 2008.
+# The reference point is pinned to WC_START (not the last row of training data)
+# so weights stay stable as WC-2026 results accumulate in the dataset.
 RECENCY_DECAY <- 0.00050
+WC_START      <- as.Date("2026-06-11")
 
 # xgboost hyper-parameters for the multiclass result model.
 XGB_PARAMS <- list(
