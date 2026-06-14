@@ -87,10 +87,18 @@ parse_fixtures <- function(raw) {
 }
 
 # Convenience: completed WC-2026 matches with valid scores (Elo/form input).
+# Primary condition: API sets finished=TRUE (reliable for previous-day games).
+# Fallback: scores exist and are non-zero — catches same-day games where the
+# worldcup26.ir API has a flag lag but the scoreline is already populated.
+# 0-0 finished games are still caught via the primary condition once the API
+# updates; the fallback would only miss them if both conditions fail together.
 finished_fixtures <- function(fixtures) {
   fixtures %>%
-    filter(finished, !is.na(home_score), !is.na(away_score),
-           !is.na(home_team), !is.na(away_team))
+    filter(
+      !is.na(home_score), !is.na(away_score),
+      !is.na(home_team),  !is.na(away_team),
+      finished | (home_score + away_score) > 0
+    )
 }
 
 # Convenience: scheduled matches with two known teams (prediction targets).

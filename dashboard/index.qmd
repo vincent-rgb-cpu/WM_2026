@@ -243,66 +243,6 @@ if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
 
 # ML Metrics
 
-## Row {height=22%}
-
-### Next Match — Model Prediction
-
-```{r}
-if (!is.null(next_match)) {
-  home  <- next_match$home_team
-  away  <- next_match$away_team
-  ph    <- round(next_match$p_home_win * 100, 1)
-  pd    <- round(next_match$p_draw     * 100, 1)
-  pa    <- round(next_match$p_away_win * 100, 1)
-  pred  <- next_match$pred_result
-
-  stage_label <- if (next_match$stage == "group")
-    paste0("Group ", next_match$group) else tools::toTitleCase(gsub("_", " ", next_match$stage))
-  date_label  <- format(as.Date(next_match$date), "%a %d %b %Y")
-
-  bar_cols <- c(
-    ifelse(pred == "home_win", "#28a745", "#4a6fa5"),
-    ifelse(pred == "draw",     "#28a745", "#6c757d"),
-    ifelse(pred == "away_win", "#28a745", "#c0392b")
-  )
-
-  # Factor levels control display order (home on top, away on bottom)
-  labels <- factor(c(home, "Draw", away), levels = c(away, "Draw", home))
-
-  plot_ly() %>%
-    add_bars(
-      x    = c(ph, pd, pa),
-      y    = labels,
-      orientation  = "h",
-      marker       = list(color = bar_cols),
-      text         = paste0(c(ph, pd, pa), "%"),
-      textposition = "inside",
-      insidetextanchor = "middle",
-      textfont     = list(size = 14, color = "#fff")
-    ) %>%
-    layout(
-      title = list(
-        text = paste0(home, " vs ", away,
-                      "  ·  ", date_label,
-                      "  ·  ", stage_label),
-        font = list(size = 14, color = "#adb5bd"),
-        x    = 0,
-        xanchor = "left"
-      ),
-      xaxis = list(range = c(0, 100), showgrid = FALSE, zeroline = FALSE,
-                   showticklabels = FALSE, title = ""),
-      yaxis = list(title = "", tickfont = list(size = 13)),
-      showlegend    = FALSE,
-      paper_bgcolor = "rgba(0,0,0,0)",
-      plot_bgcolor  = "rgba(0,0,0,0)",
-      font   = list(color = "#fff"),
-      margin = list(l = 10, r = 60, t = 45, b = 10)
-    )
-} else {
-  cat("No upcoming fixtures found.")
-}
-```
-
 ## Row {height=18%}
 
 ```{r}
