@@ -267,29 +267,53 @@ def submit_tips(df: pd.DataFrame, dry_run: bool = False,
 
     if round_spec is not None:
         # ── Interactive mode ──────────────────────────────────────────────────
-        # Launch Brave, let the user navigate to the correct round, then
-        # connect via CDP and fill predictions. No headless automation of
-        # the round selector — the user does it in a real browser window.
-        if not pathlib.Path(BRAVE_EXE).exists():
-            raise ConfigError(f"Brave not found at {BRAVE_EXE}")
-
-        print(f"Launching Brave Browser ...")
-        subprocess.Popen(
-            [BRAVE_EXE, f"--remote-debugging-port={CDP_PORT}", SRF_TIPS_URL],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        if not _wait_for_cdp(CDP_PORT):
-            raise BotError(f"Brave did not start CDP on port {CDP_PORT} within 30s.")
+        # If Brave is already running with CDP on our port, reuse it.
+        # Otherwise quit any existing Brave first (it locks the profile),
+        # then launch a fresh instance with CDP enabled.
+        if _wait_for_cdp(CDP_PORT, timeout=1):
+            print("Brave with CDP already running — reusing existing window.")
+        else:
+            if not pathlib.Path(BRAVE_EXE).exists():
+                raise ConfigError(f"Brave not found at {BRAVE_EXE}")
+            print("Quit Brave Browser 2 if it is open (it locks the profile).")
+            input("Press ENTER once Brave is closed, then we will launch it ... ")
+            subprocess.Popen(
+                [BRAVE_EXE, f"--remote-debugging-port={CDP_PORT}", SRF_TIPS_URL],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            if not _wait_for_cdp(CDP_PORT):
+                raise BotError(f"Brave did not start CDP on port {CDP_PORT} within 30s.")
+            print("Brave launched.")
 
         print()
-        print(f"  Brave is open at {SRF_TIPS_URL}")
         print(f"  → Navigate to round {round_spec!r} in the browser.")
-        input("  → Press ENTER when you are on the correct round ... ")
+        input("  → Press ENTER when you are on the correct round and cards are visible ... ")
         print()
 
         with sync_playwright() as p:
             browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
-            page    = browser.contexts[0].pages[0]
+
+            # Find the tab showing the SRF tips page; fall back to first page.
+            page = None
+            for ctx in browser.contexts:
+                for pg in ctx.pages:
+                    if "wmtippspiel.srf.ch" in pg.url:
+                        page = pg
+                        break
+                if page:
+                    break
+            if page is None:
+                page = browser.contexts[0].pages[0]
+
+            # Wait for cards to be present (gives React time to render round).
+            try:
+                page.wait_for_selector(SEL_MATCH_CARD, timeout=CARD_WAIT_TIMEOUT_MS)
+            except PlaywrightTimeout:
+                raise BotError(
+                    "No match cards found after waiting. "
+                    "Make sure you navigated to the correct round and cards are visible."
+                )
+
             _fill_cards(page, lookup, df, dry_run, label)
 
     else:
