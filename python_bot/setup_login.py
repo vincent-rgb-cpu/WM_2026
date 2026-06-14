@@ -37,6 +37,8 @@ SESSION_FILE = pathlib.Path(__file__).parent / "srg_session.json"
 # Playwright launches Brave like any Chromium-based browser by passing the
 # executable_path argument — no separate driver or extension is needed.
 BRAVE_PATHS = [
+    # macOS — "Brave Browser 2" (second profile / nightly build)
+    "/Applications/Brave Browser 2.app/Contents/MacOS/Brave Browser",
     # macOS (standard install location)
     "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
     # Linux
