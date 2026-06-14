@@ -30,14 +30,14 @@ ODDS_CACHE_DAYS <- 1L
 PREFERRED_BOOKS <- c("pinnacle", "bet365", "williamhill", "unibet",
                      "betfair_ex_eu", "betsson", "nordicbet")
 
-# Map Odds API team names → our canonical names (data_reader.R).
-# Only teams where the names differ need an entry; everything else passes through.
+# Map Odds API team names → our canonical names (data_reader.R / team_mapping.R).
+# Canonical names = what the martj42 historical dataset uses.
+# Only teams where the Odds API spelling differs from canonical need an entry.
 ODDS_NAME_MAP <- c(
   "USA"                          = "United States",
-  "Turkey"                       = "Turkiye",
-  "South Korea"                  = "Korea Republic",
-  "Ivory Coast"                  = "Cote d'Ivoire",
-  "Czech Republic"               = "Czechia",
+  "Turkiye"                      = "Turkey",           # API sends "Turkiye"; canonical is "Turkey"
+  "Korea Republic"               = "South Korea",      # API sends "Korea Republic"; canonical is "South Korea"
+  "Czechia"                      = "Czech Republic",   # API sends "Czechia"; canonical is "Czech Republic"
   "Bosnia & Herzegovina"         = "Bosnia and Herzegovina",
   "Bosnia-Herzegovina"           = "Bosnia and Herzegovina",
   "Democratic Republic of Congo" = "DR Congo",
