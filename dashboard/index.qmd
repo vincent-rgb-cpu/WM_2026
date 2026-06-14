@@ -179,15 +179,15 @@ if (has_matches) {
 ```{r}
 if (!is.null(tourney)) {
   top12 <- tourney %>%
-    arrange(desc(p_win_cup)) %>%
+    arrange(desc(Win_World_Cup)) %>%
     head(12) %>%
-    mutate(team = forcats::fct_reorder(team, p_win_cup))
+    mutate(Team = forcats::fct_reorder(Team, Win_World_Cup))
 
-  plot_ly(top12, x = ~p_win_cup, y = ~team, type = "bar",
+  plot_ly(top12, x = ~Win_World_Cup, y = ~Team, type = "bar",
           orientation = "h",
-          marker = list(color = ~p_win_cup, colorscale = "Viridis")) %>%
+          marker = list(color = ~Win_World_Cup, colorscale = "Viridis")) %>%
     layout(
-      xaxis = list(title = "P(Win Cup)", tickformat = ".0%"),
+      xaxis = list(title = "P(Win Cup) %"),
       yaxis = list(title = ""),
       paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
       font = list(color = "#fff")
