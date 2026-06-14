@@ -29,13 +29,17 @@ PREDICTIONS  = ROOT / "output" / "srf_predictions.csv"
 SESSION_FILE = pathlib.Path(__file__).parent / "srg_session.json"
 SRF_TIPS_URL = "https://wmtippspiel.srf.ch/round"
 
-# ── confirmed CSS selectors (inspected 2026-06-14) ───────────────────────────
 # ── CSS selectors (confirmed against live page 2026-06-14) ───────────────────
 SEL_MATCH_CARD      = "div.scoreBet"
 SEL_TEAM_NAME       = "h4.scoreBet__team__name"        # nth(0)=home, nth(1)=away
 SEL_SCORE_INP       = "input.scoreBet__pick__number"   # nth(0)=home, nth(1)=away
 SEL_BET_STATUS      = ".betStatus__value"              # "Tippen möglich" when open
-SEL_ROUND_DROPDOWN  = "[data-testid='dropdown']"       # chevron that opens round picker
+# Round picker: try the whole select control first (most reliably clickable),
+# then fall back to the dropdown-indicator chevron.
+SEL_ROUND_DROPDOWN_CANDIDATES = [
+    ".select__control",              # entire select box — preferred click target
+    "[data-testid='dropdown']",      # inner chevron indicator
+]
 SEL_ROUND_OPTION    = ".select__option"                # options rendered after click
 
 # ── timing constants ─────────────────────────────────────────────────────────
@@ -167,19 +171,31 @@ def select_round(page, round_spec: str) -> None:
     """
     Open the round picker dropdown and click the option matching `round_spec`.
 
-    `round_spec` can be:
-      - a plain integer string, e.g. "3"  → matches any option whose text contains "3"
-      - a label substring, e.g. "Spieltag 3" → matched case-insensitively
+    `round_spec` is matched as a case-insensitive substring, so "2" matches
+    "2.Runde", "Spieltag 2", "Round 2", etc.
     """
     print(f"Selecting round: {round_spec!r} ...")
 
-    try:
-        page.locator(SEL_ROUND_DROPDOWN).first.click(timeout=DROPDOWN_TIMEOUT_MS)
-        page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
-    except PlaywrightTimeout:
+    # Try each candidate selector in order; stop at the first one that opens
+    # the dropdown (some SRF page versions use the control, others the chevron).
+    opened = False
+    for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
+        try:
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=DROPDOWN_TIMEOUT_MS)
+            loc.click()
+            page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
+            print(f"  Dropdown opened via {sel!r}")
+            opened = True
+            break
+        except PlaywrightTimeout:
+            continue
+
+    if not opened:
         raise RoundNotFoundError(
-            f"Round dropdown did not open (selector: {SEL_ROUND_DROPDOWN!r}). "
-            "Check that SEL_ROUND_DROPDOWN still matches the page."
+            "Round dropdown did not open. Tried selectors: "
+            + ", ".join(repr(s) for s in SEL_ROUND_DROPDOWN_CANDIDATES)
+            + ". Check the page with DevTools and update SEL_ROUND_DROPDOWN_CANDIDATES."
         )
 
     options = page.locator(SEL_ROUND_OPTION).all()
@@ -188,26 +204,25 @@ def select_round(page, round_spec: str) -> None:
             f"No round options found with selector {SEL_ROUND_OPTION!r}."
         )
 
+    # Print available options so the user always knows what names are on the page.
+    available = [o.inner_text().strip() for o in options]
+    print(f"  Available rounds: {available}")
+
     target = round_spec.strip().lower()
-    matched = None
-    for opt in options:
-        text = opt.inner_text().strip()
-        if target in text.lower():
-            matched = (opt, text)
-            break
+    matched = next(
+        ((o, t) for o, t in zip(options, available) if target in t.lower()),
+        None
+    )
 
     if matched is None:
-        available = [o.inner_text().strip() for o in options]
         raise RoundNotFoundError(
-            f"Round {round_spec!r} not found in dropdown. "
-            f"Available options: {available}"
+            f"Round {round_spec!r} not found. Available: {available}"
         )
 
     opt, text = matched
-    print(f"  Clicking round option: {text!r}")
+    print(f"  Clicking: {text!r}")
     opt.click()
-    # Wait for the page to reload match cards for the selected round
-    page.wait_for_load_state("networkidle", timeout=15_000)
+    page.wait_for_load_state("networkidle", timeout=CARD_WAIT_TIMEOUT_MS)
     print(f"  Round {text!r} loaded.")
 
 
