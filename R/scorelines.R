@@ -1,8 +1,8 @@
 # =============================================================================
 # scorelines.R  --  Independent Poisson scoreline model.
 #
-# The XGBoost model outputs W/D/L probabilities, but the SRF Tippspiel game
-# requires exact scorelines (e.g. "2-1"). This module bridges that gap by:
+# The XGBoost model outputs W/D/L probabilities. This module bridges that gap
+# by producing exact scorelines (e.g. "2-1") via:
 #
 #   1. Fitting a Poisson GLM to historical goals data to estimate expected
 #      goals (xG) for each team as a function of their Elo ratings.
@@ -191,10 +191,10 @@ best_scoreline <- function(mat, pred_result) {
 }
 
 
-# --- 5. Generate all SRF predictions -----------------------------------------
+# --- 5. Generate scoreline predictions ----------------------------------------
 
 #' Apply the Poisson model to every upcoming fixture and produce a tidy CSV-
-#' ready data frame with exact scoreline predictions for SRF Tippspiel.
+#' ready data frame with exact scoreline predictions.
 #'
 #' @param fixture_preds  Output of predict_fixtures() — must contain columns:
 #'   date, home_team, away_team, pred_result.
@@ -205,7 +205,7 @@ best_scoreline <- function(mat, pred_result) {
 #'   fallback when a team is absent from the Elo table).
 #' @return Data frame with columns:
 #'   Match_Date, Team_A, Team_B, Goals_A, Goals_B, xG_A, xG_B, WDL_pred.
-generate_srf_predictions <- function(fixture_preds, poisson_model, ratings,
+generate_scoreline_predictions <- function(fixture_preds, poisson_model, ratings,
                                      elo_params = ELO_PARAMS) {
   rows <- fixture_preds %>%
     filter(!is.na(home_team), !is.na(away_team), !is.na(pred_result))

@@ -1,5 +1,5 @@
 # =============================================================================
-# 05_exact_scores.R  --  Stage 5: generate exact scorelines for SRF Tippspiel.
+# 05_exact_scores.R  --  Stage 5: generate exact scoreline predictions.
 #
 # Dependencies (run in order):
 #   01_build_dataset.R  ->  data/processed/training_data.rds
@@ -10,8 +10,8 @@
 # so the two outputs remain independent and script 05 can be re-run cheaply.
 #
 # Outputs:
-#   output/srf_predictions.csv  (Match_Date, Team_A, Team_B, Goals_A, Goals_B,
-#                                 xG_A, xG_B, WDL_pred)
+#   output/scoreline_predictions.csv  (Match_Date, Team_A, Team_B, Goals_A,
+#                                       Goals_B, xG_A, xG_B, WDL_pred)
 #
 # Run from the project root:
 #   Rscript scripts/05_exact_scores.R
@@ -50,13 +50,13 @@ log_msg("  ", nrow(wdl_preds), " fixtures to predict")
 
 # --- 3. Generate exact scorelines --------------------------------------------
 log_msg("Generating scoreline predictions ...")
-srf_preds <- generate_srf_predictions(wdl_preds, poisson_mod, bundle$ratings)
+srf_preds <- generate_scoreline_predictions(wdl_preds, poisson_mod, bundle$ratings)
 
-readr::write_csv(srf_preds, FILES$srf_predictions)
-log_msg("Saved ", FILES$srf_predictions, "  (", nrow(srf_preds), " rows)")
+readr::write_csv(srf_preds, FILES$scoreline_predictions)
+log_msg("Saved ", FILES$scoreline_predictions, "  (", nrow(srf_preds), " rows)")
 
 # --- 4. Summary output -------------------------------------------------------
-cat("\n--- SRF Tippspiel predictions (first 15) ---\n")
+cat("\n--- Scoreline predictions (first 15) ---\n")
 print(head(srf_preds[, c("Match_Date","Team_A","Goals_A","Goals_B","Team_B",
                           "xG_A","xG_B","WDL_pred")], 15),
       row.names = FALSE)

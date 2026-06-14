@@ -70,7 +70,6 @@ probabilities sum to exactly the number of slots (Win Cup = 100 %, finalists =
 ### Prerequisites
 
 - **R ≥ 4.1** with packages installed via `renv` (`make setup`)
-- **Python 3.9+** for the SRF submission bot only (`make setup-python`)
 - Optional: `ODDS_API_KEY` env variable for real market odds (free tier at
   [the-odds-api.com](https://the-odds-api.com))
 
@@ -118,43 +117,14 @@ is only placed when:
 make dashboard   # renders dashboard/index.qmd and opens it in your browser
 ```
 
-### SRF Tippspiel automation (Python, local only)
-
-The submission bot runs **locally only** — it uses interactive browser sessions
-with your personal SRF login cookies. It is not part of the CI pipeline and
-session credentials are never committed.
-
-```bash
-# 1. Install Python dependencies + Playwright browser (once)
-make setup-python
-
-# 2. Capture your SRF session interactively (once, or when it expires)
-make login
-#   → Opens Brave Browser. Log in to SRF, press ENTER in the terminal.
-#   → Saves python_bot/srg_session.json (git-ignored — never commit this).
-
-# 3. Submit predictions headlessly (auto-detects the open round)
-make submit
-
-# 4. Submit for a specific round using CDP interactive mode
-make submit ROUND=4
-#   → Checks if Brave is already running with CDP on port 9222.
-#   → If not, prompts you to close Brave first, then launches it.
-#   → Navigate to the correct round in the browser, press ENTER to fill cards.
-
-# 5. Preview without submitting
-make dry-run
-make dry-run ROUND=4
-```
-
 ### Fully automated local cron
 
 ```bash
-# Test the full pipeline + submission manually first
+# Test the full pipeline manually first
 make pipeline
 
 # Then add to crontab (crontab -e):
-0 * * * * cd /absolute/path/to/WM_2026 && bash run_pipeline.sh >> logs/cron.log 2>&1
+0 7 * * * cd /absolute/path/to/WM_2026 && bash run_pipeline.sh >> logs/cron.log 2>&1
 ```
 
 ---
@@ -202,17 +172,12 @@ WM_2026/
 │   ├── 02_train_evaluate.R       #   evaluate + fit final model → result_model.rds
 │   ├── 03_predict_tournament.R   #   per-fixture predictions + group sim → output/*.csv
 │   ├── 04_simulate.R             #   tournament Monte-Carlo → tournament_probabilities.csv
-│   ├── 05_exact_scores.R         #   Poisson scorelines  → srf_predictions.csv
+│   ├── 05_exact_scores.R         #   Poisson scorelines  → scoreline_predictions.csv
 │   └── 06_financial_benchmark.R  #   live metrics + Quarter-Kelly P&L → output/*.csv
 │
 ├── dashboard/
 │   ├── index.qmd                 # Quarto dashboard (ML Metrics + Financial Simulation)
 │   └── _quarto.yml               # Quarto project config (darkly theme)
-│
-├── python_bot/                   # SRF Tippspiel automation (local only)
-│   ├── setup_login.py            #   interactive one-time session capture
-│   ├── submit_tips.py            #   headless + CDP submission bot
-│   └── requirements.txt          #   playwright, pandas
 │
 ├── .github/workflows/
 │   └── benchmark.yml             # CI: daily pipeline run + dashboard deploy
@@ -226,8 +191,8 @@ WM_2026/
 │   ├── evaluation_metrics.csv    #   held-out accuracy / log-loss / Brier
 │   └── tournament_probabilities.csv # title & round-advancement odds
 │
-├── run_all.R                     # runs R stages 01 → 05 in sequence
-├── run_pipeline.sh               # R pipeline + Python submission (cron entry point)
+├── run_all.R                     # runs R stages 01 → 06 in sequence
+├── run_pipeline.sh               # R pipeline (cron entry point)
 └── Makefile                      # all targets — see `make help` or below
 ```
 
@@ -245,12 +210,7 @@ make scorelines     stage 05: Poisson exact scorelines
 make benchmark      stage 06: live accuracy metrics + Kelly P&L simulation
 make all            stages 01–05 in sequence
 make dashboard      render Quarto dashboard locally (opens in browser)
-make setup-python   install Python bot dependencies + Playwright
-make login          capture SRF session interactively (once)
-make submit         headless SRF tip submission
-make submit ROUND=N submit for a specific round via CDP interactive mode
-make dry-run        test SRF selectors without submitting
-make pipeline       full R pipeline + SRF submission (cron entry point)
+make pipeline       full R pipeline (cron entry point)
 make lock           snapshot R packages to renv.lock
 make clean          remove all generated artefacts (keeps raw data cache)
 ```
@@ -285,7 +245,7 @@ All features are computed *before* each match to prevent data leakage:
 
 ### Poisson scoreline model (stage 05)
 
-Translates W/D/L probabilities into the exact scoreline format required by SRF:
+Translates W/D/L probabilities into exact scorelines:
 
 - Symmetric GLM: `log(E[goals]) = α + β_att·elo_att + β_def·elo_def + β_home·is_home`
 - Fitted on matches since 2010 (~15,000 matches, 31,000 scorer-rows) with
@@ -393,37 +353,6 @@ In your repo: **Settings → Pages → Source → `gh-pages` branch, `/ (root)`*
 
 ---
 
-## SRF Tippspiel bot
-
-`python_bot/submit_tips.py` fills in your WC-2026 predictions on
-[wmtippspiel.srf.ch](https://wmtippspiel.srf.ch) using Playwright.
-
-**This bot is local-only.** It requires your personal SRF session cookies
-(`python_bot/srg_session.json`) and interacts with a live browser — neither
-of which belongs in CI.
-
-### Two submission modes
-
-| Mode | When to use | How it works |
-|------|-------------|-------------|
-| **Headless** (`make submit`) | Round is already open, page loads cleanly | Reuses saved session cookies, no browser visible |
-| **CDP interactive** (`make submit ROUND=N`) | When you need to navigate to a specific round | Launches (or reuses) Brave Browser with `--remote-debugging-port=9222`, you navigate to the correct round, then press ENTER |
-
-### CDP flow (interactive mode)
-
-1. Checks if Brave is already running with CDP on port 9222.
-2. If not: prompts you to close Brave first, then launches it automatically.
-3. You navigate to the correct round in the browser window until the match cards are fully loaded.
-4. Press ENTER — the bot connects via Playwright CDP, finds the SRF tab by URL, waits for match cards, and fills all scores.
-
-### Team name mapping
-
-The SRF page uses truncated German team names (e.g. `Bosnien-Herzeg.` instead
-of `Bosnien und Herzegowina`). The `EN_TO_DE` dictionary in `submit_tips.py`
-maps our canonical English names to SRF's display labels.
-
----
-
 ## Limitations & possible next steps
 
 - **No goal difference in the group-stage Monte-Carlo.** The Poisson model
@@ -440,10 +369,6 @@ maps our canonical English names to SRF's display labels.
 - **Retroactive odds gap.** Matches played before the odds cache was first
   populated have no real market odds and are excluded from Kelly simulation.
   As the tournament progresses and the daily cron runs, this gap shrinks.
-- **SRF CSS selectors** (`div.scoreBet`, `input.scoreBet__pick__number`, etc.)
-  were confirmed against the live site on 2026-06-14. If SRF updates their
-  frontend, re-inspect with DevTools and update the `SEL_*` constants in
-  `submit_tips.py`.
 
 ---
 

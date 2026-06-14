@@ -6,22 +6,17 @@
 #   make train      -- time-split evaluation + fit final XGBoost model
 #   make predict    -- per-fixture W/D/L predictions + group simulation
 #   make simulate   -- full-tournament Monte-Carlo (N=10,000)
-#   make scorelines -- Poisson xG model -> exact scorelines for SRF
-#
-# Python automation:
-#   make setup-python  -- install playwright + pandas, install Chromium
-#   make login         -- interactive one-time session capture
-#   make submit        -- headless tip submission (requires srg_session.json)
-#   make dry-run       -- inspect without submitting
+#   make scorelines -- Poisson xG model -> exact scoreline predictions
+#   make benchmark  -- live metrics + Kelly P&L for completed WC-2026 matches
+#   make dashboard  -- render Quarto dashboard locally
 #
 # Full end-to-end:
-#   make pipeline   -- R pipeline + Python submission (what cron runs)
+#   make pipeline   -- run the complete R pipeline via run_pipeline.sh
 
 RSCRIPT = Rscript
-PYTHON  = python3
 
 .PHONY: all setup data train predict simulate simulate-n scorelines \
-        setup-python venv login submit dry-run pipeline lock clean mv odds benchmark dashboard
+        pipeline lock clean mv odds benchmark dashboard
 
 # ── R pipeline ───────────────────────────────────────────────────────────────
 
@@ -67,37 +62,9 @@ benchmark:
 dashboard:
 	quarto render dashboard/index.qmd --output-dir docs && open docs/index.html
 
-# ── Python automation ─────────────────────────────────────────────────────────
-
-setup-python:
-	$(PYTHON) -m pip install -r python_bot/requirements.txt
-	$(PYTHON) -m playwright install chromium
-
-# Create an isolated venv with pinned versions (recommended over system pip).
-venv:
-	$(PYTHON) -m venv python_bot/.venv
-	python_bot/.venv/bin/pip install --upgrade pip -q
-	python_bot/.venv/bin/pip install -r python_bot/requirements.txt
-	python_bot/.venv/bin/playwright install chromium
-	@echo "Venv ready. Activate with: source python_bot/.venv/bin/activate"
-
 # Pin current R package versions to renv.lock for reproducibility.
 lock:
 	$(RSCRIPT) -e "if (!requireNamespace('renv', quietly=TRUE)) install.packages('renv'); renv::snapshot(prompt=FALSE)"
-
-# Run once to capture your logged-in SRF session interactively.
-login:
-	$(PYTHON) python_bot/setup_login.py
-
-# Submit predictions to SRF Tippspiel (requires srg_session.json).
-# Optional: make submit ROUND=3
-submit:
-	$(PYTHON) python_bot/submit_tips.py $(if $(ROUND),--round $(ROUND),)
-
-# Test selector matching without writing anything to the page.
-# Optional: make dry-run ROUND=3
-dry-run:
-	$(PYTHON) python_bot/submit_tips.py --dry-run $(if $(ROUND),--round $(ROUND),)
 
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 
