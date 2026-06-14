@@ -2,43 +2,20 @@
 """
 submit_tips.py  --  Headless SRF Tippspiel submission bot.
 
-Loads output/srf_predictions.csv (produced by Rscript scripts/05_exact_scores.R),
-then opens a headless Chromium browser with the pre-authenticated session from
-srg_session.json and submits each predicted scoreline to the SRF Tippspiel page.
+Loads output/srf_predictions.csv, opens a headless browser with the saved
+session, and fills in every predicted scoreline on wmtippspiel.srf.ch/round.
 
-Intended to be called automatically by run_pipeline.sh / cron.
+Scores are auto-saved by the page on every input — there is no submit button.
 
 Usage:
-    python3 python_bot/submit_tips.py          # normal run
-    python3 python_bot/submit_tips.py --dry-run # inspect only, no submissions
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO FIND THE REAL CSS SELECTORS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-All selectors below (SEL_*) are PLACEHOLDERS.  Replace them once:
-
-1. Open https://wmtippspiel.srf.ch/ in Chrome while logged in.
-2. Press F12 → "Elements" tab.
-3. Press Ctrl+Shift+C (Inspector cursor) and click the element you want.
-4. In the highlighted HTML, look at the class= or id= attributes.
-5. Right-click the highlighted node → "Copy" → "Copy selector" for a full path,
-   or write a shorter one yourself (e.g. ".tip-input-home" if the class is unique).
-
-Tips for robust selectors:
-• Prefer unique id="#something" over class chains — ids don't change with
-  responsive-layout reflows.
-• For repeated elements (one per match), pick a selector that works INSIDE a
-  card container so you don't accidentally target another match's input.
-• If the page is a React/Vue SPA, elements may not exist until after some
-  JavaScript renders them — use page.wait_for_selector() rather than
-  assuming they're immediately in the DOM.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    python3 python_bot/submit_tips.py            # fill and auto-save all tips
+    python3 python_bot/submit_tips.py --dry-run  # read-only, nothing is written
 """
 
 import argparse
 import pathlib
 import sys
+import time
 import pandas as pd
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
@@ -46,91 +23,127 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 ROOT         = pathlib.Path(__file__).parent.parent
 PREDICTIONS  = ROOT / "output" / "srf_predictions.csv"
 SESSION_FILE = pathlib.Path(__file__).parent / "srg_session.json"
+SRF_TIPS_URL = "https://wmtippspiel.srf.ch/round"
 
-# ── page URL ──────────────────────────────────────────────────────────────────
-# If the tips input form lives on a different path (e.g. /tipp or /meine-tipps),
-# update this URL.  The session will still be valid for any SRF subdomain.
-SRF_TIPS_URL = "https://wmtippspiel.srf.ch/"
+# ── confirmed CSS selectors (inspected 2026-06-14) ───────────────────────────
+SEL_MATCH_CARD = "div.scoreBet"
+SEL_TEAM_NAME  = "h4.scoreBet__team__name"       # nth(0)=home, nth(1)=away
+SEL_SCORE_INP  = "input.scoreBet__pick__number"  # nth(0)=home, nth(1)=away
+SEL_BET_STATUS = ".betStatus__value"             # contains "Tippen möglich" when open
 
-# ── CSS selectors — REPLACE THESE with values from DevTools ──────────────────
-#
-# SEL_MATCH_CARD  — the repeating <div> / <article> that wraps ONE match.
-#   HOW TO FIND: right-click any match block on the page → Inspect → look for
-#   the outermost element that repeats for every match.
-#   EXAMPLE real value might be: "article.match-item" or ".game-card"
-SEL_MATCH_CARD = ".match-card"
+# ── English → German team name translation ────────────────────────────────────
+# SRF shows German names; our CSV uses English. Add any missing team here.
+EN_TO_DE: dict[str, str] = {
+    # Europe
+    "Germany":                  "Deutschland",
+    "France":                   "Frankreich",
+    "Spain":                    "Spanien",
+    "Netherlands":              "Niederlande",
+    "Belgium":                  "Belgien",
+    "Portugal":                 "Portugal",
+    "England":                  "England",
+    "Switzerland":              "Schweiz",
+    "Austria":                  "Österreich",
+    "Sweden":                   "Schweden",
+    "Norway":                   "Norwegen",
+    "Denmark":                  "Dänemark",
+    "Poland":                   "Polen",
+    "Croatia":                  "Kroatien",
+    "Czech Republic":           "Tschechien",
+    "Serbia":                   "Serbien",
+    "Hungary":                  "Ungarn",
+    "Slovenia":                 "Slowenien",
+    "Slovakia":                 "Slowakei",
+    "Turkey":                   "Türkei",
+    "Scotland":                 "Schottland",
+    "Romania":                  "Rumänien",
+    "Albania":                  "Albanien",
+    "Greece":                   "Griechenland",
+    "Bosnia and Herzegovina":   "Bosnien-Herzegowina",
+    "Iceland":                  "Island",
+    "Ukraine":                  "Ukraine",
+    # Africa
+    "Morocco":                  "Marokko",
+    "Senegal":                  "Senegal",
+    "Nigeria":                  "Nigeria",
+    "Egypt":                    "Ägypten",
+    "Ivory Coast":              "Elfenbeinküste",
+    "Cameroon":                 "Kamerun",
+    "Tunisia":                  "Tunesien",
+    "Algeria":                  "Algerien",
+    "DR Congo":                 "DR Kongo",
+    "South Africa":             "Südafrika",
+    "Ghana":                    "Ghana",
+    "Kenya":                    "Kenia",
+    "Cape Verde":               "Kap Verde",
+    # South America
+    "Brazil":                   "Brasilien",
+    "Argentina":                "Argentinien",
+    "Colombia":                 "Kolumbien",
+    "Uruguay":                  "Uruguay",
+    "Ecuador":                  "Ecuador",
+    "Chile":                    "Chile",
+    "Bolivia":                  "Bolivien",
+    "Peru":                     "Peru",
+    "Paraguay":                 "Paraguay",
+    "Venezuela":                "Venezuela",
+    # North/Central America & Caribbean
+    "United States":            "USA",
+    "Mexico":                   "Mexiko",
+    "Canada":                   "Kanada",
+    "Panama":                   "Panama",
+    "Costa Rica":               "Costa Rica",
+    "Jamaica":                  "Jamaika",
+    "Curaçao":                  "Curaçao",
+    "Trinidad and Tobago":      "Trinidad und Tobago",
+    # Asia
+    "South Korea":              "Südkorea",
+    "Japan":                    "Japan",
+    "Iran":                     "Iran",
+    "Saudi Arabia":             "Saudi-Arabien",
+    "Australia":                "Australien",
+    "New Zealand":              "Neuseeland",
+    "Indonesia":                "Indonesien",
+    "Uzbekistan":               "Usbekistan",
+    "Jordan":                   "Jordanien",
+    "Iraq":                     "Irak",
+}
 
-# SEL_TEAM_HOME / SEL_TEAM_AWAY — the text element showing each team's name
-#   INSIDE one match card.  The bot uses these to identify which card belongs
-#   to which prediction row in the CSV.
-#   HOW TO FIND: inside the card element, find the span/div with the team name.
-SEL_TEAM_HOME = ".team-name--home"
-SEL_TEAM_AWAY = ".team-name--away"
 
-# SEL_INPUT_HOME / SEL_INPUT_AWAY — the <input type="number"> fields where
-#   you type the predicted score.
-#   HOW TO FIND: click the Inspect cursor on one of the score input boxes.
-#   COMMON patterns: input[name="score-home"], .score-input:first-child
-SEL_INPUT_HOME = "input.score--home"
-SEL_INPUT_AWAY = "input.score--away"
-
-# SEL_SUBMIT_BTN — the button that saves/submits a single match tip.
-#   If the page has ONE global "save all" button instead of per-match buttons,
-#   set this to None and uncomment the global-submit block at the bottom.
-#   HOW TO FIND: look for a <button> element with text "Tipp abgeben",
-#   "Speichern", "Submit" or similar inside / near each match card.
-SEL_SUBMIT_BTN = "button.submit-tip"
-
-# Set to True if there is a single "save all" button at the page level instead
-# of one per match card.  In that case SEL_SUBMIT_BTN is ignored.
-GLOBAL_SUBMIT = False
-SEL_GLOBAL_SUBMIT = "button#save-all-tips"   # update this selector too
-
-# How many milliseconds to wait after each submission before moving on.
-# Increase this if the site is slow or uses animations that block re-renders.
-SUBMIT_DELAY_MS = 600
+def to_german(english_name: str) -> str:
+    """Translate an English team name to German; fall back to the original."""
+    return EN_TO_DE.get(english_name.strip(), english_name.strip())
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+def normalise(name: str) -> str:
+    """Lower-case + strip for comparison — avoids case / whitespace mismatches."""
+    return name.strip().lower()
+
+
+def fill_score(locator, value: int) -> None:
+    """
+    Set a score input to `value` and trigger the page's auto-save.
+
+    The SRF page auto-saves on every keystroke via React's synthetic events.
+    fill() in Playwright fires the correct input events that React listens to.
+    We also press Tab to trigger any onBlur handler and wait briefly to let
+    the debounced save complete.
+    """
+    locator.fill(str(value))
+    locator.press("Tab")
+    time.sleep(0.4)   # give the auto-save debounce time to fire
+
 
 def load_predictions() -> pd.DataFrame:
-    """Load and validate the R-generated predictions CSV."""
     if not PREDICTIONS.exists():
         sys.exit(
             f"ERROR: {PREDICTIONS} not found.\n"
             "Run `Rscript scripts/05_exact_scores.R` first."
         )
-    df = pd.read_csv(PREDICTIONS, parse_dates=["Match_Date"])
-    required = {"Team_A", "Team_B", "Goals_A", "Goals_B"}
-    missing  = required - set(df.columns)
-    if missing:
-        sys.exit(f"ERROR: srf_predictions.csv is missing columns: {missing}")
-    print(f"Loaded {len(df)} predictions from {PREDICTIONS}")
+    df = pd.read_csv(PREDICTIONS)
+    print(f"Loaded {len(df)} predictions from {PREDICTIONS.name}")
     return df
 
-
-def is_logged_in(page) -> bool:
-    """
-    Heuristic check that the session is still authenticated.
-    Adapt the selector to a DOM element that only appears when logged in —
-    e.g. the user avatar, a "My Tips" link, or a profile menu.
-
-    HOW TO FIND: after logging in, Inspect something that only visible-to-
-    logged-in-users (e.g. "#user-avatar", ".logged-in-indicator", ".my-account").
-    """
-    # PLACEHOLDER — replace with a real selector that only appears when logged in.
-    return page.locator(".user-logged-in").count() > 0
-
-
-def normalise_name(name: str) -> str:
-    """
-    Light normalisation for team-name matching between the CSV and the webpage.
-    Extend this if the SRF page uses abbreviations or alternative spellings.
-    """
-    return name.strip().lower()
-
-
-# ── main bot ──────────────────────────────────────────────────────────────────
 
 def submit_tips(df: pd.DataFrame, dry_run: bool = False) -> None:
     if not SESSION_FILE.exists():
@@ -139,141 +152,101 @@ def submit_tips(df: pd.DataFrame, dry_run: bool = False) -> None:
             "Run `python3 python_bot/setup_login.py` first."
         )
 
-    mode_label = "[DRY RUN] " if dry_run else ""
-    print(f"{mode_label}Launching headless Chromium ...")
+    label = "[DRY RUN] " if dry_run else ""
+
+    # Build a lookup: (german_home, german_away) -> prediction row
+    lookup = {
+        (normalise(to_german(r["Team_A"])), normalise(to_german(r["Team_B"]))): r
+        for _, r in df.iterrows()
+    }
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        context = browser.new_context(storage_state=str(SESSION_FILE))
+        page    = context.new_page()
 
-        # Load the pre-authenticated context saved by setup_login.py.
-        context = browser.new_context(
-            storage_state=str(SESSION_FILE),
-            locale="de-CH",
-        )
-        page = context.new_page()
-
-        # ── navigate to the tips page ─────────────────────────────────────
-        print(f"Navigating to {SRF_TIPS_URL} ...")
+        print(f"Opening {SRF_TIPS_URL} ...")
         page.goto(SRF_TIPS_URL, wait_until="networkidle", timeout=30_000)
 
-        # ── session-expiry check ──────────────────────────────────────────
-        # This is a best-effort heuristic; if the check selector doesn't match
-        # a real DOM element it will always return False.  In that case,
-        # remove the check or update SEL inside is_logged_in().
-        if not is_logged_in(page):
-            print(
-                "WARNING: Could not confirm logged-in state "
-                "(selector inside is_logged_in() may need updating).\n"
-                "Proceeding anyway — if submissions fail, re-run setup_login.py."
-            )
-
-        # ── wait for match cards to appear ────────────────────────────────
         try:
             page.wait_for_selector(SEL_MATCH_CARD, timeout=15_000)
         except PlaywrightTimeout:
             sys.exit(
-                f"ERROR: No elements matched '{SEL_MATCH_CARD}' within 15s.\n"
-                "The page may have changed its HTML structure.\n"
-                "Open DevTools on the live page and update SEL_MATCH_CARD."
+                "ERROR: No match cards found — session may have expired.\n"
+                "Re-run setup_login.py to refresh srg_session.json."
             )
 
         cards = page.locator(SEL_MATCH_CARD).all()
         print(f"Found {len(cards)} match card(s) on the page.\n")
 
-        # Pre-build a lookup from (normalised_home, normalised_away) -> row.
-        lookup = {
-            (normalise_name(r["Team_A"]), normalise_name(r["Team_B"])): r
-            for _, r in df.iterrows()
-        }
-
-        submitted = 0
-        skipped   = 0
+        submitted = skipped = closed = 0
 
         for card in cards:
-            # ── identify the match ────────────────────────────────────────
+            # ── skip if betting window is closed for this match ───────────
+            status_el = card.locator(SEL_BET_STATUS)
+            if status_el.count() > 0:
+                status_text = status_el.first.inner_text()
+                if "möglich" not in status_text:
+                    closed += 1
+                    continue   # betting period over for this game
+
+            # ── read team names from the page ─────────────────────────────
             try:
-                home_raw = card.locator(SEL_TEAM_HOME).inner_text(timeout=3_000).strip()
-                away_raw = card.locator(SEL_TEAM_AWAY).inner_text(timeout=3_000).strip()
-            except PlaywrightTimeout:
-                print("  SKIP: Could not read team names from a card (selector mismatch?).")
+                name_els   = card.locator(SEL_TEAM_NAME).all()
+                home_page  = name_els[0].inner_text().strip()
+                away_page  = name_els[1].inner_text().strip()
+            except (PlaywrightTimeout, IndexError):
+                print("  SKIP: could not read team names from a card.")
                 skipped += 1
                 continue
 
-            key = (normalise_name(home_raw), normalise_name(away_raw))
+            # ── look up matching prediction row ───────────────────────────
+            key = (normalise(home_page), normalise(away_page))
             row = lookup.get(key)
 
             if row is None:
-                print(f"  SKIP: No prediction for {home_raw!r} vs {away_raw!r}.")
+                # Team names didn't match — likely a missing German translation.
+                # Add the pair to EN_TO_DE at the top of this file to fix it.
+                print(f"  SKIP (no match): {home_page!r} vs {away_page!r}")
+                print(f"         CSV has: {list(df['Team_A'][:3])} ...")
                 skipped += 1
                 continue
 
             goals_home = int(row["Goals_A"])
             goals_away = int(row["Goals_B"])
             print(
-                f"  {mode_label}{home_raw} {goals_home}–{goals_away} {away_raw}"
-                f"  (xG {row['xG_A']:.2f}–{row['xG_B']:.2f},  {row['WDL_pred']})"
+                f"  {label}{home_page} {goals_home}–{goals_away} {away_page}"
+                f"  (xG {row['xG_A']:.2f}–{row['xG_B']:.2f}, {row['WDL_pred']})"
             )
 
             if dry_run:
                 submitted += 1
                 continue
 
-            # ── fill score inputs ─────────────────────────────────────────
-            # triple_click selects any pre-existing text before we type,
-            # preventing concatenation (e.g. "21" instead of "2").
+            # ── fill both score inputs ────────────────────────────────────
             try:
-                inp_home = card.locator(SEL_INPUT_HOME)
-                inp_away = card.locator(SEL_INPUT_AWAY)
-
-                inp_home.triple_click()
-                inp_home.type(str(goals_home))
-                inp_away.triple_click()
-                inp_away.type(str(goals_away))
-            except PlaywrightTimeout:
-                print(f"    WARNING: Could not fill input fields — selector mismatch?")
+                inputs = card.locator(SEL_SCORE_INP).all()
+                fill_score(inputs[0], goals_home)
+                fill_score(inputs[1], goals_away)
+                submitted += 1
+            except (PlaywrightTimeout, IndexError) as e:
+                print(f"    WARNING: Could not fill inputs — {e}")
                 skipped += 1
-                continue
-
-            # ── click the per-match submit button (if not using global) ───
-            if not GLOBAL_SUBMIT:
-                btn = card.locator(SEL_SUBMIT_BTN)
-                if btn.count() > 0:
-                    btn.click()
-                    page.wait_for_timeout(SUBMIT_DELAY_MS)
-                else:
-                    # No per-card button found; the page may use a global one.
-                    # Set GLOBAL_SUBMIT = True above and update SEL_GLOBAL_SUBMIT.
-                    print("    NOTE: No per-match submit button found in this card.")
-
-            submitted += 1
-
-        # ── global submit button (if the page saves all tips at once) ─────
-        if GLOBAL_SUBMIT and not dry_run and submitted > 0:
-            try:
-                page.locator(SEL_GLOBAL_SUBMIT).click()
-                page.wait_for_timeout(2_000)
-                print(f"\nClicked global submit button '{SEL_GLOBAL_SUBMIT}'.")
-            except PlaywrightTimeout:
-                print(f"\nWARNING: Global submit button '{SEL_GLOBAL_SUBMIT}' not found.")
 
         print(
-            f"\n{mode_label}Done.  "
-            f"Submitted: {submitted}  |  Skipped: {skipped}  |  "
-            f"Total predictions: {len(df)}"
+            f"\n{label}Done.  "
+            f"Submitted: {submitted}  |  "
+            f"Betting closed: {closed}  |  "
+            f"Skipped: {skipped}"
         )
         browser.close()
 
 
-# ── entry point ───────────────────────────────────────────────────────────────
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Submit WC-2026 tips to SRF Tippspiel.")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Navigate and match predictions but do NOT fill or submit anything.",
-    )
-    return parser.parse_args()
+    p = argparse.ArgumentParser(description="Submit WC-2026 tips to SRF Tippspiel.")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Navigate and match but do NOT fill or save anything.")
+    return p.parse_args()
 
 
 if __name__ == "__main__":
