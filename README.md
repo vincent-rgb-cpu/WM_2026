@@ -101,7 +101,9 @@ make login
 # 3. Submit predictions for the current round (headless, safe to automate)
 make submit
 
-# 4. Submit for a specific round (e.g. Spieltag 3)
+# 4. Submit for a specific round (e.g. round 3)
+#    → Quit Brave if already open (prompted), then it launches with CDP.
+#    → Navigate to the correct round in the browser, press ENTER to fill.
 make submit ROUND=3
 
 # 5. Test selector matching without writing anything to the page
@@ -234,7 +236,7 @@ WM_2026/
 - **Target:** 3-class match result from the home team's perspective
   (`home_win` / `draw` / `away_win`).
 - **Features** (all computed *before* each match to avoid leakage):
-  - `elo_*` — pre-match Elo ratings and their difference. Elo uses a
+  - `elo_home_pre`, `elo_away_pre` — pre-match Elo ratings. Elo uses a
     goal-difference multiplier and a home-advantage term (0 for neutral
     venues, including all World Cup matches).
   - `form_*_diff` — difference in rolling points / goals-for / goals-against
@@ -314,8 +316,6 @@ All knobs live in [`R/config.R`](R/config.R).
   were confirmed against the live page (2026-06-14): `div.scoreBet`,
   `h4.scoreBet__team__name`, `input.scoreBet__pick__number`. If SRF updates
   their frontend, re-inspect with DevTools and update the `SEL_*` constants.
-- A reproducible environment lock (`renv` for R, `pip freeze` for Python) would
-  round out the project.
 
 ---
 
