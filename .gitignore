@@ -72,6 +72,9 @@ vignettes/*.pdf
 # pkgdown site
 docs/
 
+# Debug / one-off screenshots
+python_bot/debug_*.png
+
 # translation temp files
 po/*~
 

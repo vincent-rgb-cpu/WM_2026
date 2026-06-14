@@ -64,21 +64,26 @@ fit_poisson_model <- function(training_data, min_date = POISSON_MIN_DATE) {
     goals      = m$home_score,
     elo_attack = m$elo_home_pre,
     elo_def    = m$elo_away_pre,
-    is_home    = as.integer(!m$neutral)   # neutral venue -> no home bonus
+    is_home    = as.integer(!m$neutral),   # neutral venue -> no home bonus
+    date       = m$date
   )
   away_view <- data.frame(
     goals      = m$away_score,
     elo_attack = m$elo_away_pre,
     elo_def    = m$elo_home_pre,
-    is_home    = 0L                        # away team never gets the home bonus
+    is_home    = 0L,                        # away team never gets the home bonus
+    date       = m$date
   )
 
-  long <- rbind(home_view, away_view)
+  long     <- rbind(home_view, away_view)
+  max_date <- max(long$date)
+  long$sample_weight <- exp(-RECENCY_DECAY * as.numeric(max_date - long$date))
 
   fit <- glm(
     goals ~ elo_attack + elo_def + is_home,
-    data   = long,
-    family = poisson(link = "log")
+    data    = long,
+    family  = poisson(link = "log"),
+    weights = sample_weight
   )
 
   log_msg(
@@ -100,12 +105,16 @@ fit_poisson_model <- function(training_data, min_date = POISSON_MIN_DATE) {
 #' @param neutral        TRUE (default) for World Cup matches at neutral venues.
 #' @return Named list: lambda_home, lambda_away (numeric scalars).
 predict_xg <- function(poisson_model, elo_home, elo_away, neutral = TRUE) {
-  is_h <- if (neutral) 0L else 1L
+  # For neutral venues, assign 0.5 to both sides rather than 0: this recovers
+  # the average scoring environment without giving either team a directional
+  # edge. Setting both to 0 (two "away teams") suppresses goals ~13% below
+  # the WC historical baseline because the GLM intercept was estimated on data
+  # where one team almost always received the full home-advantage boost.
+  is_h_home <- if (neutral) 0.5 else 1L
+  is_h_away <- if (neutral) 0.5 else 0L
 
-  # Home team's attacking view (is_home applies to them).
-  nd_home <- data.frame(elo_attack = elo_home, elo_def = elo_away, is_home = is_h)
-  # Away team's attacking view (never gets the home bonus).
-  nd_away <- data.frame(elo_attack = elo_away, elo_def = elo_home, is_home = 0L)
+  nd_home <- data.frame(elo_attack = elo_home, elo_def = elo_away, is_home = is_h_home)
+  nd_away <- data.frame(elo_attack = elo_away, elo_def = elo_home, is_home = is_h_away)
 
   list(
     lambda_home = unname(predict(poisson_model, nd_home, type = "response")),
