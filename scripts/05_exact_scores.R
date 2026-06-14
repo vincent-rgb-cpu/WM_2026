@@ -20,6 +20,7 @@
 source("R/utils.R")
 load_pipeline("R")
 ensure_dirs()
+set.seed(GLOBAL_SEED)
 
 bundle <- readRDS(FILES$training_data)
 model  <- load_model()

@@ -11,6 +11,7 @@
 source("R/utils.R")
 load_pipeline("R")
 ensure_dirs()
+set.seed(GLOBAL_SEED)
 
 # --- 1. Historical training data --------------------------------------------
 download_historical()

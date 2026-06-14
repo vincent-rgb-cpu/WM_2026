@@ -9,7 +9,15 @@ output/
 python_bot/srg_session.json
 python_bot/__pycache__/
 python_bot/*.pyc
+python_bot/.venv/
 .pytest_cache/
+
+# --- R package reproducibility ---
+# renv.lock IS committed (it pins package versions).
+# The installed library directory is NOT committed (it is reproduced via renv::restore()).
+renv/library/
+renv/python/
+renv/staging/
 
 # --- Logs ---
 logs/

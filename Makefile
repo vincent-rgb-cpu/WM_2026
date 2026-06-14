@@ -21,7 +21,7 @@ RSCRIPT = Rscript
 PYTHON  = python3
 
 .PHONY: all setup data train predict simulate simulate-n scorelines \
-        setup-python login submit dry-run pipeline clean
+        setup-python venv login submit dry-run pipeline lock clean
 
 # ── R pipeline ───────────────────────────────────────────────────────────────
 
@@ -54,6 +54,18 @@ scorelines:
 setup-python:
 	$(PYTHON) -m pip install -r python_bot/requirements.txt
 	$(PYTHON) -m playwright install chromium
+
+# Create an isolated venv with pinned versions (recommended over system pip).
+venv:
+	$(PYTHON) -m venv python_bot/.venv
+	python_bot/.venv/bin/pip install --upgrade pip -q
+	python_bot/.venv/bin/pip install -r python_bot/requirements.txt
+	python_bot/.venv/bin/playwright install chromium
+	@echo "Venv ready. Activate with: source python_bot/.venv/bin/activate"
+
+# Pin current R package versions to renv.lock for reproducibility.
+lock:
+	$(RSCRIPT) -e "if (!requireNamespace('renv', quietly=TRUE)) install.packages('renv'); renv::snapshot(prompt=FALSE)"
 
 # Run once to capture your logged-in SRF session interactively.
 login:

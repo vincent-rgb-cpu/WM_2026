@@ -77,8 +77,11 @@ XGB_PARAMS <- list(
 XGB_NROUNDS <- 250L
 
 # Feature columns fed to the model (order matters; reused at predict time).
+# elo_diff (= elo_home_pre - elo_away_pre) is deliberately excluded: it is a
+# deterministic linear combination of the two raw ratings already present, so
+# it wastes tree splits and pollutes feature-importance scores.
 FEATURE_COLS <- c(
-  "elo_home_pre", "elo_away_pre", "elo_diff", "home_adv",
+  "elo_home_pre", "elo_away_pre", "home_adv",
   "form_pts_diff", "form_gf_diff", "form_ga_diff", "rest_diff"
 )
 
@@ -91,10 +94,18 @@ POISSON_MIN_DATE <- as.Date("2010-01-01")
 # A 6x6 grid (0-5) covers >99% of all international match scorelines.
 MAX_GOALS <- 5L
 
+# Global random seed used by all scripts for reproducibility.
+GLOBAL_SEED <- 42L
+
 # Monte-Carlo group-stage simulation (the quick group-only sim in script 03).
 SIM_N        <- 2000L
-SIM_SEED     <- 42L
+SIM_SEED     <- GLOBAL_SEED
 N_THIRDS_ADV <- 8L   # best 3rd-placed teams that advance (WC 2026 format)
 
 # Full tournament Monte-Carlo (script 04: groups -> knockout -> final).
 TOURNAMENT_SIM_N <- 10000L
+
+# xgboost early stopping: halt training if val mlogloss doesn't improve for
+# this many rounds. The eval model's best_iteration is then reused for the
+# final model so we never train for an arbitrary fixed nrounds.
+XGB_EARLY_STOPPING_ROUNDS <- 20L

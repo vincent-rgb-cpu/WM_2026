@@ -24,10 +24,36 @@ suppressPackageStartupMessages({
 
 # Train the result model. Returns a small bundle carrying everything needed to
 # predict later (booster + the feature order + class levels).
-train_model <- function(train_df, params = XGB_PARAMS, nrounds = XGB_NROUNDS) {
-  dtrain <- .make_dmatrix(train_df, with_label = TRUE)
-  booster <- xgb.train(params = params, data = dtrain, nrounds = nrounds,
-                       verbose = 0)
+#
+# When val_df is supplied, early stopping monitors val_mlogloss and halts after
+# XGB_EARLY_STOPPING_ROUNDS rounds without improvement. booster$best_iteration
+# records the optimal round count so the caller can reuse it for the final model.
+train_model <- function(train_df, val_df = NULL,
+                        params = XGB_PARAMS, nrounds = XGB_NROUNDS) {
+  dtrain    <- .make_dmatrix(train_df, with_label = TRUE)
+  watchlist <- list(train = dtrain)
+  early     <- NULL
+
+  if (!is.null(val_df)) {
+    watchlist$val <- .make_dmatrix(val_df, with_label = TRUE)
+    early         <- XGB_EARLY_STOPPING_ROUNDS
+  }
+
+  booster <- xgb.train(
+    params                = params,
+    data                  = dtrain,
+    nrounds               = nrounds,
+    watchlist             = watchlist,
+    early_stopping_rounds = early,
+    verbose               = 0
+  )
+
+  if (!is.null(early)) {
+    log_msg("Early stopping: best round = ", booster$best_iteration,
+            " (val_mlogloss = ",
+            round(booster$best_score, 4), ")")
+  }
+
   structure(
     list(booster = booster, features = FEATURE_COLS, levels = RESULT_LEVELS),
     class = "wm_model"

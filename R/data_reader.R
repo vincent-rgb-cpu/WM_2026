@@ -45,6 +45,20 @@ fetch_fixtures <- function(url = FIXTURES_URL, cache_file = FILES$fixtures_raw,
 # Parse the raw JSON into a tidy tibble, one row per match.
 parse_fixtures <- function(raw) {
   games <- raw$games %||% raw
+
+  # Fail loudly if the API response changes shape rather than silently
+  # returning a tibble full of NAs.
+  if (length(games) == 0L)
+    stop("parse_fixtures: API returned zero games")
+  required_keys <- c("id", "local_date", "home_team_name_en",
+                     "away_team_name_en", "finished")
+  missing_keys <- required_keys[
+    !vapply(required_keys, function(k) !is.null(games[[1L]][[k]]), logical(1))
+  ]
+  if (length(missing_keys) > 0L)
+    stop("parse_fixtures: API response missing expected field(s): ",
+         paste(missing_keys, collapse = ", "))
+
   pull <- function(key) vapply(games, function(g) {
     v <- g[[key]]
     if (is.null(v)) NA_character_ else as.character(v)
@@ -82,6 +96,6 @@ finished_fixtures <- function(fixtures) {
 upcoming_fixtures <- function(fixtures) {
   fixtures %>%
     filter(!finished,
-           !is.na(home_team), !is.na(away_team),
-           home_team != "", away_team != "")
+           !is.na(home_team), home_team != "",
+           !is.na(away_team), away_team != "")
 }

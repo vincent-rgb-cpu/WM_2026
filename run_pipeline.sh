@@ -39,6 +39,18 @@ log() {
 log "Pipeline started  (log: $LOGFILE)"
 log "Project root: $SCRIPT_DIR"
 
+# ── resolve Python interpreter ────────────────────────────────────────────────
+# Prefer the project venv if it exists (created by `make venv`), fall back to
+# the system python3. This ensures the pinned dependencies are always used.
+VENV_PYTHON="python_bot/.venv/bin/python3"
+if [ -f "$VENV_PYTHON" ]; then
+    PYTHON="$VENV_PYTHON"
+    log "Using venv Python: $VENV_PYTHON"
+else
+    PYTHON="python3"
+    log "Using system Python: $(which python3)"
+fi
+
 # ── argument parsing ─────────────────────────────────────────────────────────
 R_ONLY=false
 for arg in "$@"; do
@@ -78,7 +90,7 @@ else
         exit 1
     fi
 
-    if python3 python_bot/submit_tips.py >> "$LOGFILE" 2>&1; then
+    if "$PYTHON" python_bot/submit_tips.py >> "$LOGFILE" 2>&1; then
         log "Submission completed successfully."
     else
         log "ERROR: Submission failed — check $LOGFILE for details."

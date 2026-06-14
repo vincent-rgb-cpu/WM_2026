@@ -11,6 +11,7 @@
 source("R/utils.R")
 load_pipeline("R")
 ensure_dirs()
+set.seed(GLOBAL_SEED)
 
 bundle   <- readRDS(FILES$training_data)
 training <- bundle$training
@@ -20,7 +21,9 @@ split <- time_split(training, EVAL_CUTOFF)
 log_msg("Train rows: ", nrow(split$train), " | Test rows (>= ",
         format(EVAL_CUTOFF), "): ", nrow(split$test))
 
-eval_model <- train_model(split$train)
+# val_df enables early stopping: xgboost monitors val_mlogloss and records the
+# optimal round count in eval_model$booster$best_iteration.
+eval_model <- train_model(split$train, val_df = split$test)
 metrics    <- evaluate_model(eval_model, split)
 
 cat("\n--- Held-out evaluation (test set: matches on/after ",
@@ -31,7 +34,11 @@ readr::write_csv(metrics, FILES$metrics)
 log_msg("Saved ", FILES$metrics)
 
 # --- 2. Final model: refit on the full training window for deployment --------
-final_model <- train_model(training)
+# Reuse the optimal nrounds found by early stopping above so we don't
+# hard-code an arbitrary fixed round count.
+best_n      <- eval_model$booster$best_iteration %||% XGB_NROUNDS
+log_msg("Final model nrounds: ", best_n)
+final_model <- train_model(training, nrounds = best_n)
 save_model(final_model)
 log_msg("Saved ", FILES$model)
 

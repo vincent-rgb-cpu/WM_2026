@@ -18,6 +18,8 @@ import argparse
 import pathlib
 import sys
 import time
+from typing import Optional
+
 import pandas as pd
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
@@ -28,12 +30,35 @@ SESSION_FILE = pathlib.Path(__file__).parent / "srg_session.json"
 SRF_TIPS_URL = "https://wmtippspiel.srf.ch/round"
 
 # ── confirmed CSS selectors (inspected 2026-06-14) ───────────────────────────
+# ── CSS selectors (confirmed against live page 2026-06-14) ───────────────────
 SEL_MATCH_CARD      = "div.scoreBet"
 SEL_TEAM_NAME       = "h4.scoreBet__team__name"        # nth(0)=home, nth(1)=away
 SEL_SCORE_INP       = "input.scoreBet__pick__number"   # nth(0)=home, nth(1)=away
 SEL_BET_STATUS      = ".betStatus__value"              # "Tippen möglich" when open
 SEL_ROUND_DROPDOWN  = "[data-testid='dropdown']"       # chevron that opens round picker
 SEL_ROUND_OPTION    = ".select__option"                # options rendered after click
+
+# ── timing constants ─────────────────────────────────────────────────────────
+AUTOSAVE_DEBOUNCE_S  = 0.4      # wait after fill() for React's debounce to fire
+PAGE_LOAD_TIMEOUT_MS = 30_000
+CARD_WAIT_TIMEOUT_MS = 15_000
+DROPDOWN_TIMEOUT_MS  = 10_000
+OPTION_WAIT_TIMEOUT_MS = 5_000
+
+# ── exceptions ───────────────────────────────────────────────────────────────
+
+class BotError(RuntimeError):
+    """Raised for any unrecoverable bot error; caught at __main__ to exit cleanly."""
+
+class SessionExpiredError(BotError):
+    pass
+
+class ConfigError(BotError):
+    pass
+
+class RoundNotFoundError(BotError):
+    pass
+
 
 # ── English → German team name translation ────────────────────────────────────
 # SRF shows German names; our CSV uses English. Add any missing team here.
@@ -135,7 +160,7 @@ def fill_score(locator, value: int) -> None:
     """
     locator.fill(str(value))
     locator.press("Tab")
-    time.sleep(0.4)   # give the auto-save debounce time to fire
+    time.sleep(AUTOSAVE_DEBOUNCE_S)
 
 
 def select_round(page, round_spec: str) -> None:
@@ -149,19 +174,19 @@ def select_round(page, round_spec: str) -> None:
     print(f"Selecting round: {round_spec!r} ...")
 
     try:
-        # Click the chevron/dropdown indicator to open the picker
-        page.locator(SEL_ROUND_DROPDOWN).first.click(timeout=10_000)
-        page.wait_for_selector(SEL_ROUND_OPTION, timeout=5_000)
+        page.locator(SEL_ROUND_DROPDOWN).first.click(timeout=DROPDOWN_TIMEOUT_MS)
+        page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
     except PlaywrightTimeout:
-        sys.exit(
-            "ERROR: Round dropdown did not open.\n"
-            f"  selector tried: {SEL_ROUND_DROPDOWN}\n"
-            "  Check that SEL_ROUND_DROPDOWN still matches the page."
+        raise RoundNotFoundError(
+            f"Round dropdown did not open (selector: {SEL_ROUND_DROPDOWN!r}). "
+            "Check that SEL_ROUND_DROPDOWN still matches the page."
         )
 
     options = page.locator(SEL_ROUND_OPTION).all()
     if not options:
-        sys.exit(f"ERROR: No round options found with selector {SEL_ROUND_OPTION!r}.")
+        raise RoundNotFoundError(
+            f"No round options found with selector {SEL_ROUND_OPTION!r}."
+        )
 
     target = round_spec.strip().lower()
     matched = None
@@ -173,9 +198,9 @@ def select_round(page, round_spec: str) -> None:
 
     if matched is None:
         available = [o.inner_text().strip() for o in options]
-        sys.exit(
-            f"ERROR: Round {round_spec!r} not found in dropdown.\n"
-            f"  Available options: {available}"
+        raise RoundNotFoundError(
+            f"Round {round_spec!r} not found in dropdown. "
+            f"Available options: {available}"
         )
 
     opt, text = matched
@@ -188,8 +213,8 @@ def select_round(page, round_spec: str) -> None:
 
 def load_predictions() -> pd.DataFrame:
     if not PREDICTIONS.exists():
-        sys.exit(
-            f"ERROR: {PREDICTIONS} not found.\n"
+        raise ConfigError(
+            f"{PREDICTIONS} not found. "
             "Run `Rscript scripts/05_exact_scores.R` first."
         )
     df = pd.read_csv(PREDICTIONS)
@@ -197,10 +222,11 @@ def load_predictions() -> pd.DataFrame:
     return df
 
 
-def submit_tips(df: pd.DataFrame, dry_run: bool = False, round_spec: str | None = None) -> None:
+def submit_tips(df: pd.DataFrame, dry_run: bool = False,
+                round_spec: Optional[str] = None) -> None:
     if not SESSION_FILE.exists():
-        sys.exit(
-            f"ERROR: {SESSION_FILE} not found.\n"
+        raise SessionExpiredError(
+            f"{SESSION_FILE} not found. "
             "Run `python3 python_bot/setup_login.py` first."
         )
 
@@ -218,16 +244,16 @@ def submit_tips(df: pd.DataFrame, dry_run: bool = False, round_spec: str | None 
         page    = context.new_page()
 
         print(f"Opening {SRF_TIPS_URL} ...")
-        page.goto(SRF_TIPS_URL, wait_until="networkidle", timeout=30_000)
+        page.goto(SRF_TIPS_URL, wait_until="networkidle", timeout=PAGE_LOAD_TIMEOUT_MS)
 
         if round_spec is not None:
             select_round(page, round_spec)
 
         try:
-            page.wait_for_selector(SEL_MATCH_CARD, timeout=15_000)
+            page.wait_for_selector(SEL_MATCH_CARD, timeout=CARD_WAIT_TIMEOUT_MS)
         except PlaywrightTimeout:
-            sys.exit(
-                "ERROR: No match cards found — session may have expired.\n"
+            raise SessionExpiredError(
+                "No match cards found — session may have expired. "
                 "Re-run setup_login.py to refresh srg_session.json."
             )
 
@@ -307,6 +333,19 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    args  = parse_args()
-    preds = load_predictions()
-    submit_tips(preds, dry_run=args.dry_run, round_spec=args.round)
+    args = parse_args()
+    try:
+        preds = load_predictions()
+        submit_tips(preds, dry_run=args.dry_run, round_spec=args.round)
+    except SessionExpiredError as e:
+        print(f"ERROR (session): {e}")
+        sys.exit(1)
+    except ConfigError as e:
+        print(f"ERROR (config): {e}")
+        sys.exit(1)
+    except RoundNotFoundError as e:
+        print(f"ERROR (round): {e}")
+        sys.exit(1)
+    except BotError as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
