@@ -176,20 +176,31 @@ def select_round(page, round_spec: str) -> None:
     """
     print(f"Selecting round: {round_spec!r} ...")
 
-    # Try each candidate selector in order; stop at the first one that opens
-    # the dropdown (some SRF page versions use the control, others the chevron).
+    # Try each candidate selector with force=True (bypasses Playwright's
+    # actionability checks — useful when the element is rendered but partially
+    # obscured or not yet in the viewport).
     opened = False
     for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
         try:
-            loc = page.locator(sel).first
-            loc.wait_for(state="visible", timeout=DROPDOWN_TIMEOUT_MS)
-            loc.click()
+            page.locator(sel).first.click(force=True, timeout=DROPDOWN_TIMEOUT_MS)
             page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
             print(f"  Dropdown opened via {sel!r}")
             opened = True
             break
         except PlaywrightTimeout:
             continue
+
+    # Last resort: fire a raw JS click on each candidate.
+    if not opened:
+        for sel in SEL_ROUND_DROPDOWN_CANDIDATES:
+            try:
+                page.evaluate(f"document.querySelector({sel!r})?.click()")
+                page.wait_for_selector(SEL_ROUND_OPTION, timeout=OPTION_WAIT_TIMEOUT_MS)
+                print(f"  Dropdown opened via JS click on {sel!r}")
+                opened = True
+                break
+            except PlaywrightTimeout:
+                continue
 
     if not opened:
         raise RoundNotFoundError(
