@@ -2,12 +2,19 @@
 """
 setup_login.py  --  One-time interactive session capture for SRF Tippspiel.
 
-Run this ONCE before the automated bot.  It opens a visible Chromium window,
-lets you log in manually (including any CAPTCHA or 2FA), then saves the
-authenticated browser state (cookies + localStorage) to srg_session.json.
+Run this ONCE before the automated bot.  It opens a visible Brave browser
+window, lets you log in manually (including any CAPTCHA or 2FA), then saves
+the authenticated browser state (cookies + localStorage) to srg_session.json.
 
 The headless submit_tips.py script loads that file on every automated run so
 it starts already logged in — no credentials are ever stored in plain text.
+
+WHY BRAVE?
+Playwright's bundled Chromium is flagged as "not safe" by some sites because
+it has no verified publisher.  Brave is your real, installed browser so sites
+treat it as a normal user visit.  The saved session file is then loaded by the
+headless bot which uses Playwright's Chromium — that works fine because the
+bot only needs the cookies, not the browser brand.
 
 Usage:
     python3 python_bot/setup_login.py
@@ -26,16 +33,52 @@ from playwright.sync_api import sync_playwright
 SRF_URL      = "https://wmtippspiel.srf.ch/"
 SESSION_FILE = pathlib.Path(__file__).parent / "srg_session.json"
 
+# Brave executable paths for each platform.
+# Playwright launches Brave like any Chromium-based browser by passing the
+# executable_path argument — no separate driver or extension is needed.
+BRAVE_PATHS = [
+    # macOS (standard install location)
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    # Linux
+    "/usr/bin/brave-browser",
+    "/usr/bin/brave",
+    # Windows (uncomment if needed)
+    # r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+]
+
+
+def find_brave() -> str:
+    """Return the path to the Brave executable, or exit with a helpful message."""
+    for path in BRAVE_PATHS:
+        if pathlib.Path(path).exists():
+            return path
+    sys.exit(
+        "Could not find Brave Browser.\n"
+        "Set the correct path in the BRAVE_PATHS list at the top of setup_login.py.\n"
+        "To find it: run  `which brave-browser`  or look in /Applications on macOS."
+    )
+
 
 def main() -> None:
     print("=" * 62)
-    print("  SRF Tippspiel — one-time login session capture")
+    print("  SRF Tippspiel — one-time login session capture (Brave)")
     print("=" * 62)
     print()
 
+    brave_exe = find_brave()
+    print(f"Using Brave at: {brave_exe}")
+    print()
+
     with sync_playwright() as p:
-        # Launch a visible (non-headless) browser so you can interact normally.
-        browser = p.chromium.launch(headless=False, slow_mo=50)
+        # Launch YOUR installed Brave browser (not Playwright's bundled Chromium).
+        # Brave is Chromium-based so the Playwright chromium API works identically.
+        # slow_mo adds a small delay between actions — useful during interactive use.
+        browser = p.chromium.launch(
+            executable_path=brave_exe,
+            headless=False,
+            slow_mo=50,
+            args=["--no-sandbox"],   # avoids permission prompts on some systems
+        )
 
         # A fresh context with no stored state — clean slate every time you
         # run this script, which avoids stale-cookie edge cases.
@@ -49,7 +92,7 @@ def main() -> None:
         page.goto(SRF_URL, wait_until="domcontentloaded")
 
         print()
-        print("A Chromium browser window has opened.")
+        print("A Brave browser window has opened.")
         print()
         print("Steps:")
         print("  1. Accept the cookie banner if it appears.")
