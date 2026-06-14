@@ -261,7 +261,9 @@ def select_round(page, round_spec: str) -> None:
     opt, text = matched
     print(f"  Clicking: {text!r}")
     opt.click()
-    page.wait_for_load_state("networkidle", timeout=CARD_WAIT_TIMEOUT_MS)
+    # SPA: round change is a React re-render, not a page navigation.
+    # Wait for match cards to appear instead of networkidle.
+    page.wait_for_selector(SEL_MATCH_CARD, timeout=CARD_WAIT_TIMEOUT_MS)
     print(f"  Round {text!r} loaded.")
 
 
