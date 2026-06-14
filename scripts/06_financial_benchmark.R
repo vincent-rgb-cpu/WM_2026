@@ -57,7 +57,8 @@ if (nrow(finished) == 0L) {
 log_msg("Generating model predictions for ", nrow(finished),
         " finished WC-2026 matches ...")
 
-preds <- predict_fixtures(model, finished, bundle$ratings, bundle$team_form)
+preds <- predict_fixtures(model, finished, bundle$ratings, bundle$team_form,
+                         fast_ratings = bundle$fast_ratings %||% list())
 
 # ── Join predictions with actual scores ───────────────────────────────────────
 match_log <- finished %>%

@@ -18,7 +18,8 @@ model  <- load_model()
 
 # --- 1. Per-fixture predictions for every scheduled, known-team match --------
 upcoming <- upcoming_fixtures(bundle$fixtures)
-preds    <- predict_fixtures(model, upcoming, bundle$ratings, bundle$team_form)
+preds    <- predict_fixtures(model, upcoming, bundle$ratings, bundle$team_form,
+                             fast_ratings = bundle$fast_ratings %||% list())
 log_msg("Predicted ", nrow(preds), " upcoming fixtures")
 
 readr::write_csv(preds, FILES$fixture_preds)

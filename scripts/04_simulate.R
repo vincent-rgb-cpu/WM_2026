@@ -27,7 +27,9 @@ model  <- load_model()
 log_msg("Running full-tournament Monte-Carlo with N = ", N, " simulations")
 t0 <- Sys.time()
 probs <- run_tournament_simulation(model, bundle$fixtures, bundle$ratings,
-                                   bundle$team_form, N = N)
+                                   bundle$team_form,
+                                   fast_ratings = bundle$fast_ratings %||% list(),
+                                   N = N)
 log_msg("Simulation finished in ",
         round(as.numeric(difftime(Sys.time(), t0, units = "secs")), 1), "s")
 

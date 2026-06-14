@@ -34,7 +34,8 @@ suppressPackageStartupMessages({
 # --- Pairwise match probabilities -------------------------------------------
 # For every ordered pair (home, away) of the 48 teams, the model's W/D/L
 # probabilities, stored as three [n x n] matrices indexed by team position.
-precompute_match_probs <- function(model, teams, ratings, team_form) {
+precompute_match_probs <- function(model, teams, ratings, team_form,
+                                   fast_ratings = list()) {
   n    <- length(teams)
   grid <- expand.grid(home_team = teams, away_team = teams,
                       stringsAsFactors = FALSE)
@@ -45,7 +46,7 @@ precompute_match_probs <- function(model, teams, ratings, team_form) {
   grid$stage    <- "ko"
   grid$neutral  <- TRUE   # hypothetical KO matchups have no home venue
 
-  pr  <- predict_fixtures(model, grid, ratings, team_form)
+  pr  <- predict_fixtures(model, grid, ratings, team_form, fast_ratings)
   idx <- setNames(seq_len(n), teams)
 
   PH <- PD <- PA <- matrix(0, n, n, dimnames = list(teams, teams))
@@ -205,6 +206,7 @@ simulate_groups <- function(gstruct, P, elo_frac, N) {
 # with columns: Team, Group_Winner, Make_R32, Make_R16, Make_QF, Make_SF,
 # Make_Final, Win_World_Cup (all as percentages, sorted by title odds).
 run_tournament_simulation <- function(model, fixtures, ratings, team_form,
+                                      fast_ratings = list(),
                                       N = TOURNAMENT_SIM_N, seed = SIM_SEED) {
   set.seed(seed)
 
@@ -215,7 +217,7 @@ run_tournament_simulation <- function(model, fixtures, ratings, team_form,
   gidx  <- .group_index(sort(unique(gfx$group)))
 
   log_msg("Pre-computing pairwise match probabilities (", n, " teams) ...")
-  P <- precompute_match_probs(model, teams, ratings, team_form)
+  P <- precompute_match_probs(model, teams, ratings, team_form, fast_ratings)
 
   elo_vals <- vapply(teams, function(t) ratings[[t]] %||% ELO_PARAMS$init_rating,
                      numeric(1))

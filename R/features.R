@@ -16,26 +16,53 @@ suppressPackageStartupMessages({
   library(zoo)
 })
 
+# --- Match importance & knockout flag ----------------------------------------
+# Derive an ordinal importance tier from the `stage` column.
+# Historical rows carry the tournament name as `stage` (e.g. "FIFA World Cup",
+# "Friendly"); WC-2026 rows carry the round code (group/r32/r16/qf/sf/final).
+#   0 = friendly  |  1 = qualifier  |  2 = tournament / group  |  3 = knockout
+match_importance_score <- function(stage) {
+  dplyr::case_when(
+    grepl("^Friendly$",                              stage, ignore.case = TRUE) ~ 0L,
+    grepl("qualif",                                  stage, ignore.case = TRUE) ~ 1L,
+    grepl("^(r32|r16|qf|sf|third|final|ko)$",       stage, ignore.case = TRUE) ~ 3L,
+    TRUE                                                                        ~ 2L
+  )
+}
+
+is_knockout_flag <- function(stage) {
+  as.integer(grepl("^(r32|r16|qf|sf|third|final|ko)$", stage, ignore.case = TRUE))
+}
+
 # --- Elo ---------------------------------------------------------------------
 # Walk matches chronologically, attaching each side's pre-match Elo, and
 # return both the augmented matches and the final per-team rating vector.
-# Matches with missing scores (e.g. not-yet-played) contribute no update.
+# A *fast* Elo is computed in parallel using FAST_K_MULTIPLIER × the normal K.
+# It reacts heavily to the last ~3 matches, capturing recent momentum
+# independently of the long-run slow Elo. Matches with missing scores
+# (e.g. not-yet-played) contribute no update to either rating system.
 compute_elo <- function(matches, params = ELO_PARAMS) {
-  teams   <- unique(c(matches$home_team, matches$away_team))
-  ratings <- setNames(rep(params$init_rating, length(teams)), teams)
+  teams        <- unique(c(matches$home_team, matches$away_team))
+  ratings      <- setNames(rep(params$init_rating, length(teams)), teams)
+  fast_ratings <- setNames(rep(params$init_rating, length(teams)), teams)
+  fast_k       <- params$k * FAST_K_MULTIPLIER
 
-  n  <- nrow(matches)
-  eh <- numeric(n); ea <- numeric(n)
-  ht <- matches$home_team; at <- matches$away_team
-  hs <- matches$home_score; as_ <- matches$away_score
+  n   <- nrow(matches)
+  eh  <- numeric(n); ea  <- numeric(n)
+  feh <- numeric(n); fea <- numeric(n)   # fast-Elo pre-match snapshots
+  ht  <- matches$home_team; at <- matches$away_team
+  hs  <- matches$home_score; as_ <- matches$away_score
   neu <- matches$neutral
 
   for (i in seq_len(n)) {
-    rh <- ratings[[ht[i]]]; ra <- ratings[[at[i]]]
-    eh[i] <- rh; ea[i] <- ra
+    rh <- ratings[[ht[i]]];      ra <- ratings[[at[i]]]
+    fh <- fast_ratings[[ht[i]]]; fa <- fast_ratings[[at[i]]]
+    eh[i]  <- rh; ea[i]  <- ra
+    feh[i] <- fh; fea[i] <- fa
 
-    adv   <- if (isTRUE(neu[i])) 0 else params$home_advantage
-    exp_h <- 1 / (1 + 10 ^ ((ra - (rh + adv)) / 400))
+    adv        <- if (isTRUE(neu[i])) 0 else params$home_advantage
+    exp_h      <- 1 / (1 + 10 ^ ((ra - (rh + adv)) / 400))
+    exp_h_fast <- 1 / (1 + 10 ^ ((fa - (fh + adv)) / 400))
 
     if (is.na(hs[i]) || is.na(as_[i])) next  # unplayed -> no rating change
 
@@ -59,15 +86,18 @@ compute_elo <- function(matches, params = ELO_PARAMS) {
       g_base * (2.2 / (winner_delta * 0.001 + 2.2))
     }
 
-    d <- params$k * g * (res - exp_h)
+    d      <- params$k * g * (res - exp_h)
+    d_fast <- fast_k    * g * (res - exp_h_fast)
 
-    ratings[[ht[i]]] <- rh + d
-    ratings[[at[i]]] <- ra - d
+    ratings[[ht[i]]]      <- rh + d;      ratings[[at[i]]]      <- ra - d
+    fast_ratings[[ht[i]]] <- fh + d_fast; fast_ratings[[at[i]]] <- fa - d_fast
   }
 
-  matches$elo_home_pre <- eh
-  matches$elo_away_pre <- ea
-  list(matches = matches, ratings = ratings)
+  matches$elo_home_pre      <- eh
+  matches$elo_away_pre      <- ea
+  matches$fast_elo_home_pre <- feh
+  matches$fast_elo_away_pre <- fea
+  list(matches = matches, ratings = ratings, fast_ratings = fast_ratings)
 }
 
 # --- Rolling form ------------------------------------------------------------
@@ -166,14 +196,18 @@ build_features <- function(matches, params = ELO_PARAMS) {
       rest_diff     = pmin(home_days_rest, 365) - pmin(away_days_rest, 365),
       sample_weight = exp(-RECENCY_DECAY * as.numeric(ref_date - date)),
       log_mv_home   = mv_log(home_team),
-      log_mv_away   = mv_log(away_team)
+      log_mv_away   = mv_log(away_team),
+      match_importance = match_importance_score(stage),
+      is_knockout      = is_knockout_flag(stage),
+      momentum_home    = fast_elo_home_pre - elo_home_pre,
+      momentum_away    = fast_elo_away_pre - elo_away_pre
     )
 
   n_mv <- sum(!is.na(feats$log_mv_home) | !is.na(feats$log_mv_away))
   log_msg("Market value coverage: ", n_mv, " / ", nrow(feats),
           " rows have at least one team MV")
 
-  list(data = feats, ratings = elo$ratings)
+  list(data = feats, ratings = elo$ratings, fast_ratings = elo$fast_ratings)
 }
 
 # --- Squad market values (Transfermarkt) -------------------------------------

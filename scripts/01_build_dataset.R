@@ -35,8 +35,9 @@ log_msg("Training rows (>= ", format(TRAIN_START), "): ", nrow(training))
 team_form <- current_team_form(all_matches)
 
 saveRDS(
-  list(training = training, ratings = built$ratings, team_form = team_form,
-       fixtures = fixtures),
+  list(training = training, ratings = built$ratings,
+       fast_ratings = built$fast_ratings,
+       team_form = team_form, fixtures = fixtures),
   FILES$training_data
 )
 log_msg("Saved ", FILES$training_data)

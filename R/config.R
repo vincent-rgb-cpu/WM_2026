@@ -50,6 +50,11 @@ ELO_PARAMS <- list(
   home_advantage = 65     # rating points added to the home side (0 if neutral)
 )
 
+# Fast-Elo K multiplier: fast_k = FAST_K_MULTIPLIER * ELO_PARAMS$k.
+# At 3x (k=60), the fast-Elo half-life is ~3 matches; it tracks recent momentum
+# independently of the slow Elo that embeds long-run team strength.
+FAST_K_MULTIPLIER <- 3L
+
 # Rolling-form window: number of most recent matches used for form features.
 FORM_WINDOW <- 5L
 
@@ -68,18 +73,30 @@ EVAL_CUTOFF <- as.Date("2021-01-01")
 RECENCY_DECAY <- 0.00050
 WC_START      <- as.Date("2026-06-11")
 
+# Dead-rubber adjustment (group-stage simulation only).
+# A team already sitting on DEAD_RUBBER_PTS after two matchdays is guaranteed
+# to advance; their MD3 probabilities are shrunk by DEAD_RUBBER_SHRINK toward
+# uniform (1/3 each) to proxy squad rotation / reduced motivation.
+DEAD_RUBBER_PTS    <- 6L
+DEAD_RUBBER_SHRINK <- 0.40
+
 # xgboost hyper-parameters for the multiclass result model.
+# Tuned via random search (scripts/07_tune_hyperparameters.R) after adding
+# fast-Elo momentum and match-importance features. Heavier regularisation
+# (gamma, min_child_weight, shallower depth) prevents momentum from dominating
+# splits. Lower eta compensated by increased nrounds.
 XGB_PARAMS <- list(
   objective        = "multi:softprob",
   num_class        = length(RESULT_LEVELS),
   eval_metric      = "mlogloss",
-  eta              = 0.08,
-  max_depth        = 4,
+  eta              = 0.04,
+  max_depth        = 3,
   subsample        = 0.85,
   colsample_bytree = 0.85,
-  min_child_weight = 5
+  min_child_weight = 10,
+  gamma            = 0.30
 )
-XGB_NROUNDS <- 250L
+XGB_NROUNDS <- 300L
 
 # Feature columns fed to the model (order matters; reused at predict time).
 # elo_diff (= elo_home_pre - elo_away_pre) is deliberately excluded: it is a
@@ -88,7 +105,11 @@ XGB_NROUNDS <- 250L
 FEATURE_COLS <- c(
   "elo_home_pre", "elo_away_pre", "home_adv",
   "form_pts_diff", "form_gf_diff", "form_ga_diff", "rest_diff",
-  "log_mv_home", "log_mv_away"
+  "log_mv_home", "log_mv_away",
+  "match_importance",   # 0=friendly | 1=qualifier | 2=tournament group | 3=knockout
+  "is_knockout",        # binary: 1 for r32/r16/qf/sf/final
+  "momentum_home",      # fast_elo_pre - slow_elo_pre (positive = recent upswing)
+  "momentum_away"
 )
 
 # Minimum match date used to train the Poisson goals model. A tighter window
