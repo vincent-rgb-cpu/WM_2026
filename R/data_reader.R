@@ -80,8 +80,9 @@ parse_fixtures <- function(raw) {
     # "Winner Match 74". These define the official FIFA 2026 bracket.
     home_label = pull("home_team_label"),
     away_label = pull("away_team_label"),
-    # World Cup matches are played at neutral venues (host advantage ignored).
-    neutral    = TRUE
+    # WC 2026 co-hosts (USA, Canada, Mexico) play in their own stadiums and
+    # receive a home-venue advantage; all other matches are neutral.
+    neutral    = !home_team %in% c("United States", "Mexico", "Canada")
   )
 }
 

@@ -34,7 +34,7 @@ predict_fixtures <- function(model, fixtures, ratings, team_form,
       elo_home_pre  = elo_of(home_team),
       elo_away_pre  = elo_of(away_team),
       elo_diff      = elo_home_pre - elo_away_pre,
-      home_adv      = 0L,                       # neutral-venue tournament
+      home_adv      = ifelse(neutral, 0L, 1L),  # 1 for WC 2026 host nations
       form_pts_diff = form_of(home_team, "cur_form_pts", 1) -
                       form_of(away_team, "cur_form_pts", 1),
       form_gf_diff  = form_of(home_team, "cur_form_gf", 1) -
