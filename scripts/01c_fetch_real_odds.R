@@ -45,9 +45,10 @@ ODDS_NAME_MAP <- c(
 )
 
 canonicalize <- function(name) {
-  if (is.na(name) || !nzchar(name)) return(name)
-  mapped <- ODDS_NAME_MAP[[name]]   # NULL when absent, not a named-NA
-  if (is.null(mapped)) name else mapped
+  if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name))
+    return(as.character(name))
+  mapped <- ODDS_NAME_MAP[name]     # [ ] returns named NA when key absent (no error)
+  if (is.na(mapped)) name else unname(mapped)
 }
 
 # ── Validate API key ──────────────────────────────────────────────────────────
