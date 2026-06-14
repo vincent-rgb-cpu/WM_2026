@@ -43,15 +43,29 @@ train_model <- function(train_df, val_df = NULL,
     params                = params,
     data                  = dtrain,
     nrounds               = nrounds,
-    watchlist             = watchlist,
+    evals                 = watchlist,
     early_stopping_rounds = early,
     verbose               = 0
   )
 
   if (!is.null(early)) {
-    log_msg("Early stopping: best round = ", booster$best_iteration,
-            " (val_mlogloss = ",
-            round(booster$best_score, 4), ")")
+    best_iter <- booster$best_iteration
+    if (is.null(best_iter)) {
+      log_msg("Early stopping: no plateau in ", nrounds, " rounds (model still improving)")
+    } else {
+      # best_score slot name varies by xgboost version; fall back to eval_log
+      best_score <- tryCatch(
+        round(as.numeric(booster$best_score), 4),
+        error = function(e) {
+          log <- booster$evaluation_log
+          if (!is.null(log) && "val_mlogloss" %in% names(log))
+            round(log$val_mlogloss[best_iter], 4)
+          else NA_real_
+        }
+      )
+      log_msg("Early stopping: best round = ", best_iter,
+              " (val_mlogloss = ", best_score, ")")
+    }
   }
 
   structure(
