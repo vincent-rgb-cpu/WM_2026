@@ -1,0 +1,325 @@
+---
+title: "WM 2026 — Live Model Benchmark"
+subtitle: "Out-of-sample evaluation & simulated P&L · Auto-updated via GitHub Actions"
+date: today
+format:
+  dashboard:
+    theme: darkly
+    nav-buttons:
+      - icon: github
+        href: https://github.com/vincent-rgb-cpu/WM_2026
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(plotly)
+library(DT)
+library(scales)
+
+# Paths relative to project root (dashboard/ is rendered from root in CI)
+ROOT <- if (file.exists("output/wc2026_match_log.csv")) "." else ".."
+
+match_log <- tryCatch(
+  readr::read_csv(file.path(ROOT, "output/wc2026_match_log.csv"),
+                  show_col_types = FALSE),
+  error = function(e) NULL
+)
+pnl <- tryCatch(
+  readr::read_csv(file.path(ROOT, "output/financial_benchmark.csv"),
+                  show_col_types = FALSE),
+  error = function(e) NULL
+)
+tourney <- tryCatch(
+  readr::read_csv(file.path(ROOT, "output/tournament_probabilities.csv"),
+                  show_col_types = FALSE),
+  error = function(e) NULL
+)
+metrics <- tryCatch(
+  readr::read_csv(file.path(ROOT, "output/evaluation_metrics.csv"),
+                  show_col_types = FALSE),
+  error = function(e) NULL
+)
+
+has_matches <- !is.null(match_log) && nrow(match_log) > 0
+has_pnl     <- !is.null(pnl)       && nrow(pnl) > 1
+```
+
+# ML Metrics
+
+## Row {height=20%}
+
+```{r}
+#| content: valuebox
+#| title: "WC 2026 Accuracy"
+acc_live <- if (has_matches) percent(mean(match_log$correct), 0.1) else "—"
+list(icon = "bullseye", color = "success", value = acc_live)
+```
+
+```{r}
+#| content: valuebox
+#| title: "WC 2026 Log-Loss"
+ll_live <- if (has_matches) round(mean(match_log$log_loss), 3) else "—"
+list(icon = "activity", color = "info", value = ll_live)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Held-out Accuracy (2021+)"
+acc_hist <- if (!is.null(metrics))
+  percent(metrics$accuracy[metrics$model == "xgboost"], 0.1) else "—"
+list(icon = "graph-up", color = "primary", value = acc_hist)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Matches Evaluated"
+n_matches <- if (has_matches) nrow(match_log) else 0
+list(icon = "calendar-check", color = "secondary", value = n_matches)
+```
+
+## Row {height=40%}
+
+### Calibration — Predicted vs Actual {width=60%}
+
+```{r}
+if (has_matches) {
+  # Bin predicted probabilities and compare to empirical frequencies
+  cal <- match_log %>%
+    tidyr::pivot_longer(c(p_home_win, p_draw, p_away_win),
+                        names_to = "outcome", values_to = "pred_prob") %>%
+    mutate(
+      outcome_label = recode(outcome,
+        p_home_win = "Home Win", p_draw = "Draw", p_away_win = "Away Win"),
+      bin = cut(pred_prob, breaks = seq(0, 1, 0.1), include.lowest = TRUE)
+    ) %>%
+    group_by(outcome_label, bin) %>%
+    summarise(
+      mean_pred = mean(pred_prob),
+      mean_act  = mean(actual_result == recode(outcome_label,
+        "Home Win" = "home_win", "Draw" = "draw", "Away Win" = "away_win")),
+      n = n(), .groups = "drop"
+    ) %>%
+    filter(n >= 2)
+
+  plot_ly(cal, x = ~mean_pred, y = ~mean_act, color = ~outcome_label,
+          size = ~n, type = "scatter", mode = "markers",
+          marker = list(opacity = 0.8)) %>%
+    add_lines(x = c(0,1), y = c(0,1), line = list(dash = "dash", color = "grey"),
+              showlegend = FALSE, inherit = FALSE) %>%
+    layout(
+      xaxis = list(title = "Predicted Probability", range = c(0,1)),
+      yaxis = list(title = "Empirical Frequency",   range = c(0,1)),
+      legend = list(orientation = "h"),
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = "#fff")
+    )
+} else {
+  cat("No completed WC-2026 matches yet.")
+}
+```
+
+### Model vs Baselines {width=40%}
+
+```{r}
+if (!is.null(metrics)) {
+  metrics_long <- metrics %>%
+    tidyr::pivot_longer(c(accuracy, log_loss, brier),
+                        names_to = "metric", values_to = "value") %>%
+    mutate(metric = recode(metric,
+      accuracy = "Accuracy ↑", log_loss = "Log-Loss ↓", brier = "Brier ↓"))
+
+  plot_ly(metrics_long, x = ~model, y = ~value, color = ~model,
+          type = "bar", facet_col = ~metric) %>%
+    layout(
+      barmode = "group",
+      xaxis = list(title = ""),
+      yaxis = list(title = "Score"),
+      showlegend = FALSE,
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = "#fff")
+    )
+} else {
+  cat("Metrics file not found.")
+}
+```
+
+## Row {height=40%}
+
+### Match-by-Match Log-Loss {width=60%}
+
+```{r}
+if (has_matches) {
+  ml_sorted <- match_log %>%
+    arrange(date) %>%
+    mutate(
+      label    = paste(home_team, "vs", away_team),
+      cum_ll   = cummean(log_loss),
+      match_no = row_number()
+    )
+
+  plot_ly() %>%
+    add_bars(data = ml_sorted, x = ~match_no, y = ~log_loss,
+             name = "Per-Match Log-Loss", marker = list(color = "#6c757d")) %>%
+    add_lines(data = ml_sorted, x = ~match_no, y = ~cum_ll,
+              name = "Cumulative Mean", line = list(color = "#17a2b8", width = 2)) %>%
+    layout(
+      xaxis = list(title = "Match Number"),
+      yaxis = list(title = "Log-Loss"),
+      legend = list(orientation = "h"),
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = "#fff")
+    )
+} else {
+  cat("No completed matches yet.")
+}
+```
+
+### Tournament Odds (Top 12) {width=40%}
+
+```{r}
+if (!is.null(tourney)) {
+  top12 <- tourney %>%
+    arrange(desc(p_win_cup)) %>%
+    head(12) %>%
+    mutate(team = forcats::fct_reorder(team, p_win_cup))
+
+  plot_ly(top12, x = ~p_win_cup, y = ~team, type = "bar",
+          orientation = "h",
+          marker = list(color = ~p_win_cup, colorscale = "Viridis")) %>%
+    layout(
+      xaxis = list(title = "P(Win Cup)", tickformat = ".0%"),
+      yaxis = list(title = ""),
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = "#fff")
+    )
+} else {
+  cat("Tournament probabilities not found.")
+}
+```
+
+# Financial Simulation
+
+> **Methodology:** Bets placed on the model's highest-probability outcome for each
+> completed WC-2026 match. Bookmaker odds estimated as `model_prob / 1.05` (5 % margin).
+> Stake = Quarter-Kelly fraction of current bankroll, capped at 10 %.
+> This is a **simulation with estimated odds**, not a live trade log.
+
+## Row {height=20%}
+
+```{r}
+#| content: valuebox
+#| title: "Starting Bankroll"
+list(icon = "bank", color = "secondary", value = "1,000 units")
+```
+
+```{r}
+#| content: valuebox
+#| title: "Current Bankroll"
+bk_now <- if (has_pnl) comma(round(tail(pnl$bankroll, 1))) else "—"
+list(icon = "cash-stack", color = "success", value = bk_now)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Simulated ROI"
+roi <- if (has_pnl) {
+  r <- (tail(pnl$bankroll, 1) - 1000) / 1000
+  paste0(if (r >= 0) "+" else "", percent(r, 0.1))
+} else "—"
+col <- if (!is.null(match_log) && has_pnl &&
+           tail(pnl$bankroll, 1) >= 1000) "success" else "danger"
+list(icon = "percent", color = col, value = roi)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Bets Placed"
+n_bets <- if (has_pnl) tail(pnl$n_bets, 1) else "—"
+list(icon = "lightning-charge", color = "info", value = n_bets)
+```
+
+## Row {height=45%}
+
+### Cumulative Bankroll {width=65%}
+
+```{r}
+if (has_pnl) {
+  plot_ly(pnl, x = ~date, y = ~bankroll, type = "scatter", mode = "lines+markers",
+          line = list(color = "#28a745", width = 2),
+          marker = list(color = "#28a745", size = 6),
+          fill = "tozeroy", fillcolor = "rgba(40,167,69,0.15)") %>%
+    add_lines(x = range(pnl$date), y = c(1000, 1000),
+              line = list(dash = "dash", color = "grey", width = 1),
+              showlegend = FALSE, inherit = FALSE) %>%
+    layout(
+      xaxis = list(title = "Date"),
+      yaxis = list(title = "Bankroll (units)"),
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = "#fff")
+    )
+} else {
+  cat("No P&L data yet.")
+}
+```
+
+### Return per Bet {width=35%}
+
+```{r}
+if (has_matches) {
+  bet_data <- match_log %>%
+    filter(kelly_stake > 0) %>%
+    arrange(date) %>%
+    mutate(
+      label  = paste(home_team, "vs", away_team),
+      colour = if_else(bet_return > 0, "Win", "Loss")
+    )
+
+  plot_ly(bet_data, x = ~seq_along(bet_return), y = ~bet_return,
+          type = "bar", color = ~colour,
+          colors = c("Win" = "#28a745", "Loss" = "#dc3545"),
+          text = ~label, hoverinfo = "text+y") %>%
+    layout(
+      xaxis = list(title = "Bet #"),
+      yaxis = list(title = "Return (units)"),
+      showlegend = TRUE,
+      legend = list(orientation = "h"),
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = "#fff")
+    )
+} else {
+  cat("No bets placed yet.")
+}
+```
+
+## Row {height=35%}
+
+### Full Match Log
+
+```{r}
+if (has_matches) {
+  match_log %>%
+    arrange(date) %>%
+    mutate(
+      Score      = paste0(home_score, "–", away_score),
+      Predicted  = pred_result,
+      Actual     = actual_result,
+      `P(actual)` = round(p_actual, 3),
+      `Log-Loss` = round(log_loss, 3),
+      Correct    = if_else(correct, "✓", "✗"),
+      Edge       = percent(edge, 0.1),
+      Stake      = round(kelly_stake, 1),
+      Return     = round(bet_return, 1),
+      Bankroll   = round(bankroll, 1)
+    ) %>%
+    select(Date = date, Home = home_team, Away = away_team, Score,
+           Predicted, Actual, `P(actual)`, `Log-Loss`, Correct,
+           Edge, Stake, Return, Bankroll) %>%
+    DT::datatable(
+      options = list(pageLength = 16, dom = "tip", scrollX = TRUE),
+      rownames = FALSE,
+      class    = "table-dark table-sm"
+    ) %>%
+    DT::formatStyle("Correct",
+      color = DT::styleEqual(c("✓", "✗"), c("#28a745", "#dc3545")))
+}
+```

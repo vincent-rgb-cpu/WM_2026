@@ -1,0 +1,113 @@
+name: Update Benchmark Dashboard
+
+on:
+  schedule:
+    # Run daily at 07:00 UTC during the tournament (June–July 2026)
+    - cron: '0 7 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'R/**'
+      - 'scripts/**'
+      - 'dashboard/**'
+      - 'renv.lock'
+  workflow_dispatch:   # manual trigger from the GitHub Actions tab
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-dashboard:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── R setup ──────────────────────────────────────────────────────────────
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.5'
+          use-public-rspm: true
+
+      # ── Cache R packages via renv ─────────────────────────────────────────────
+      - name: Restore renv library
+        uses: r-lib/actions/setup-renv@v2
+        with:
+          cache-version: 2
+
+      # ── Install rendering packages (not in core renv.lock) ───────────────────
+      - name: Install dashboard packages
+        run: |
+          Rscript -e "
+            pkgs <- c('quarto', 'plotly', 'DT', 'scales', 'forcats', 'readr', 'tidyr')
+            missing <- pkgs[!pkgs %in% rownames(installed.packages())]
+            if (length(missing))
+              install.packages(missing, repos = 'https://cloud.r-project.org')
+          "
+
+      # ── Quarto ───────────────────────────────────────────────────────────────
+      - name: Setup Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      # ── Cache slow data files (market values, historical results) ────────────
+      - name: Cache data files
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw/squad_market_values.csv
+            data/raw/international_results.csv
+          key: data-${{ hashFiles('scripts/01b_scrape_market_values.R') }}-${{ env.WEEK }}
+          restore-keys: |
+            data-${{ hashFiles('scripts/01b_scrape_market_values.R') }}-
+            data-
+        env:
+          WEEK: ${{ steps.date.outputs.week }}
+
+      - name: Get week number (cache busting)
+        id: date
+        run: echo "week=$(date +%V)" >> $GITHUB_OUTPUT
+
+      # ── Run R pipeline ────────────────────────────────────────────────────────
+      - name: Fetch market values (if cache miss)
+        run: |
+          if [ ! -f "data/raw/squad_market_values.csv" ]; then
+            Rscript scripts/01b_scrape_market_values.R
+          else
+            echo "Market values cache hit — skipping scrape."
+          fi
+
+      - name: Stage 01 — Build dataset
+        run: Rscript scripts/01_build_dataset.R
+
+      - name: Stage 02 — Train model
+        run: Rscript scripts/02_train_evaluate.R
+
+      - name: Stage 03 — Predict tournament
+        run: Rscript scripts/03_predict_tournament.R
+
+      - name: Stage 04 — Simulate tournament
+        run: Rscript scripts/04_simulate.R
+
+      - name: Stage 05 — Exact scorelines
+        run: Rscript scripts/05_exact_scores.R
+
+      - name: Stage 06 — Financial benchmark
+        run: Rscript scripts/06_financial_benchmark.R
+
+      # ── Render Quarto dashboard ───────────────────────────────────────────────
+      - name: Render dashboard
+        run: quarto render dashboard/index.qmd --output-dir ../docs
+        # renders relative to dashboard/, writing HTML to docs/ at repo root
+
+      # ── Deploy to GitHub Pages ────────────────────────────────────────────────
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          commit_message: "ci: update benchmark dashboard [skip ci]"

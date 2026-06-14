@@ -53,6 +53,14 @@ simulate-n:
 scorelines:
 	$(RSCRIPT) scripts/05_exact_scores.R
 
+# Live benchmarking: metrics + simulated P&L for completed WC-2026 matches.
+benchmark:
+	$(RSCRIPT) scripts/06_financial_benchmark.R
+
+# Render Quarto dashboard locally (opens in browser).
+dashboard:
+	quarto render dashboard/index.qmd --output-dir docs && open docs/index.html
+
 # ── Python automation ─────────────────────────────────────────────────────────
 
 setup-python:

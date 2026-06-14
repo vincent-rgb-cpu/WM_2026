@@ -1,0 +1,15 @@
+project:
+  type: website
+
+website:
+  title: "WM 2026 Model Benchmark"
+  favicon: ""
+  navbar:
+    background: dark
+
+format:
+  html:
+    theme: [darkly]
+    highlight-style: github-dark
+    page-layout: full
+    self-contained: false

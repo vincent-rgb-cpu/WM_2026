@@ -3,6 +3,12 @@
 data/raw/
 data/processed/
 output/
+# Exception: benchmark outputs committed so GitHub Actions can read them
+# without re-running the full pipeline on every Pages build check.
+!output/wc2026_match_log.csv
+!output/financial_benchmark.csv
+!output/evaluation_metrics.csv
+!output/tournament_probabilities.csv
 
 # --- Python automation ---
 # srg_session.json contains SRF authentication cookies — NEVER commit this.
