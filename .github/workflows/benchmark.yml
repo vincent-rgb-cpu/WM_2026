@@ -98,16 +98,8 @@ jobs:
       - name: Refresh WC fixtures
         run: |
           echo "Attempting to refresh fixtures from worldcup26.ir ..."
-          if curl -sf --max-time 20 \
-               -o data/raw/wc2026_fixtures.json \
-               "https://worldcup26.ir/get/games" 2>/dev/null; then
-            FINISHED=$(python3 -c "
-import json,sys
-d=json.load(open('data/raw/wc2026_fixtures.json'))
-g=d.get('games',d)
-print(sum(str(x.get('finished','')).upper()=='TRUE' for x in g))
-" 2>/dev/null || echo "?")
-            echo "Fixtures refreshed — ${FINISHED} finished matches."
+          if curl -sf --max-time 20 -o data/raw/wc2026_fixtures.json "https://worldcup26.ir/get/games"; then
+            echo "Fixtures refreshed successfully."
           else
             echo "Could not reach worldcup26.ir — using committed fixtures as fallback."
           fi
