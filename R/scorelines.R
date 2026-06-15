@@ -125,20 +125,53 @@ predict_xg <- function(poisson_model, elo_home, elo_away, neutral = TRUE) {
 
 # --- 3. Scoreline probability matrix -----------------------------------------
 
-#' Build the full scoreline probability matrix under independent Poisson.
+#' Apply the Dixon-Coles low-score dependency correction to a score matrix.
 #'
-#' Entry [i, j] = P(home scores i-1 goals) * P(away scores j-1 goals).
-#' Rows index home goals (1 = 0 goals, 2 = 1 goal, ..., max_goals+1 = max_goals).
+#' The independent-Poisson model systematically under-predicts 0-0 and 1-1
+#' and over-predicts 1-0 and 0-1. Dixon & Coles (1997) model this with a
+#' single correlation parameter rho (negative empirically).
+#'
+#' The four modifiers are:
+#'   P(0,0) × (1 − λμρ)   →  increased when ρ < 0
+#'   P(1,0) × (1 + λρ)    →  decreased when ρ < 0
+#'   P(0,1) × (1 + μρ)    →  decreased when ρ < 0
+#'   P(1,1) × (1 − ρ)     →  increased when ρ < 0
+#'
+#' After modification the matrix is renormalised to sum to 1 and any negative
+#' cells (which can arise for unusually high xG values) are floored at 0.
+#'
+#' @param mat     Numeric matrix from outer(h_probs, a_probs).
+#' @param lambda  Expected home goals (scalar).
+#' @param mu      Expected away goals (scalar).
+#' @param rho     Dependency parameter. Default DC_RHO = -0.15.
+#' @return Corrected and renormalised matrix with the same dimensions.
+dc_correct_matrix <- function(mat, lambda, mu, rho = DC_RHO) {
+  mat[1L, 1L] <- mat[1L, 1L] * (1 - lambda * mu * rho)   # P(0, 0)
+  mat[2L, 1L] <- mat[2L, 1L] * (1 + lambda * rho)         # P(1, 0)
+  mat[1L, 2L] <- mat[1L, 2L] * (1 + mu     * rho)         # P(0, 1)
+  mat[2L, 2L] <- mat[2L, 2L] * (1 - rho)                  # P(1, 1)
+  mat <- pmax(mat, 0)    # guard against negative cells at extreme xG
+  mat / sum(mat)         # renormalise to unit sum
+}
+
+#' Build the full scoreline probability matrix with Dixon-Coles correction.
+#'
+#' Entry [i, j] = P(home scores i-1 goals, away scores j-1 goals) after
+#' applying the DC dependency adjustment to the four low-scoring cells.
+#' Rows index home goals (1 = 0 goals, ..., max_goals+1 = max_goals).
 #' Cols index away goals in the same way.
 #'
-#' @param lambda_home  Expected home goals (lambda of the home Poisson).
-#' @param lambda_away  Expected away goals (lambda of the away Poisson).
-#' @param max_goals    Maximum goals to model per side (default MAX_GOALS = 5).
-#' @return Numeric matrix of dimension (max_goals+1) x (max_goals+1).
-score_matrix <- function(lambda_home, lambda_away, max_goals = MAX_GOALS) {
-  h_probs <- dpois(0:max_goals, lambda_home)   # P(home = 0), P(home = 1), ...
-  a_probs <- dpois(0:max_goals, lambda_away)   # P(away = 0), P(away = 1), ...
-  outer(h_probs, a_probs)                       # [home_goals+1, away_goals+1]
+#' @param lambda_home  Expected home goals.
+#' @param lambda_away  Expected away goals.
+#' @param max_goals    Maximum goals per side (default MAX_GOALS = 5).
+#' @param rho          Dixon-Coles correlation parameter (default DC_RHO).
+#' @return Corrected numeric matrix of dimension (max_goals+1) × (max_goals+1).
+score_matrix <- function(lambda_home, lambda_away,
+                         max_goals = MAX_GOALS, rho = DC_RHO) {
+  h_probs <- dpois(0:max_goals, lambda_home)
+  a_probs <- dpois(0:max_goals, lambda_away)
+  mat <- outer(h_probs, a_probs)
+  dc_correct_matrix(mat, lambda_home, lambda_away, rho)
 }
 
 

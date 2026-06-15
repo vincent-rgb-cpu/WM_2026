@@ -10,6 +10,7 @@
 suppressPackageStartupMessages({
   library(xgboost)
   library(dplyr)
+  library(nnet)   # multinom — base R recommended package, always available
 })
 
 # Build the xgboost DMatrix from a feature frame. `label` is optional so the
@@ -74,15 +75,58 @@ train_model <- function(train_df, val_df = NULL,
   )
 }
 
-# Predict a probability matrix (rows = matches, cols = RESULT_LEVELS).
-# Modern xgboost returns an [n x num_class] matrix for multi:softprob; older
-# versions return a flat row-major vector. Handle both.
+# Predict a calibrated probability matrix (rows = matches, cols = RESULT_LEVELS).
+# Pipeline:
+#   1. XGBoost raw softprob  →  [n × 3] matrix
+#   2. apply_calibrator()    →  Platt-scaled probabilities (pass-through if NULL)
+# Modern xgboost returns a matrix directly; older versions return a flat vector.
 predict_proba <- function(model, newdf) {
   d <- .make_dmatrix(newdf, with_label = FALSE)
   p <- predict(model$booster, d)
   m <- if (is.matrix(p)) p else matrix(p, ncol = length(model$levels), byrow = TRUE)
   colnames(m) <- model$levels
-  m
+  apply_calibrator(model$calibrator, m)
+}
+
+# --- Probability calibration (Platt scaling, multiclass) ---------------------
+# Fit a multinomial logistic regression on the raw XGBoost probability outputs
+# to correct systematic over- or under-confidence before edge calculations.
+#
+# Design:
+#   * Input: two of the three XGBoost probabilities (p_draw, p_away_win).
+#     p_home_win is omitted — the three sum to 1, so including all three
+#     creates perfect collinearity and makes multinom ill-conditioned.
+#   * Reference level: "home_win" (the first level of RESULT_LEVELS).
+#   * Fit on the VALIDATION set predictions so the calibrator never sees the
+#     same rows that trained the booster.
+#
+# Usage:
+#   calibrator <- fit_calibrator(val_raw_probs, val_true_labels)
+#   final_model$calibrator <- calibrator   # attach; predict_proba auto-applies
+fit_calibrator <- function(raw_probs, true_labels) {
+  colnames(raw_probs) <- RESULT_LEVELS
+  df   <- as.data.frame(raw_probs)
+  df$y <- factor(true_labels, levels = RESULT_LEVELS)
+  suppressWarnings(
+    nnet::multinom(y ~ draw + away_win,   # column names come from RESULT_LEVELS
+                   data = df, trace = FALSE, maxit = 500)
+  )
+}
+
+# Apply a fitted calibrator to a raw probability matrix.
+# Returns the calibrated [n × 3] matrix in RESULT_LEVELS column order.
+# Pass-through (returns raw_probs unchanged) when calibrator is NULL so the
+# function is safe to call on models that pre-date calibration support.
+apply_calibrator <- function(calibrator, raw_probs) {
+  if (is.null(calibrator)) return(raw_probs)
+  colnames(raw_probs) <- RESULT_LEVELS
+  df  <- as.data.frame(raw_probs)
+  cal <- predict(calibrator, newdata = df, type = "probs")
+  # nnet returns a named vector for n=1, a matrix/data.frame otherwise.
+  if (is.vector(cal))
+    cal <- matrix(cal, nrow = 1L, dimnames = list(NULL, names(cal)))
+  cal <- as.matrix(cal)
+  cal[, RESULT_LEVELS, drop = FALSE]
 }
 
 # Relative feature importance, handy for the README / sanity checks.

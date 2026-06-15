@@ -1,64 +1,59 @@
 Match_Date,Team_A,Team_B,Goals_A,Goals_B,xG_A,xG_B,WDL_pred
-2026-06-14,Ivory Coast,Ecuador,1,1,0.877,1.589,draw
-2026-06-14,Netherlands,Japan,1,0,1.2,1.126,home_win
-2026-06-14,Sweden,Tunisia,1,0,1.27,1.143,home_win
-2026-06-15,Iran,New Zealand,1,0,1.815,0.792,home_win
-2026-06-15,Spain,Cape Verde,3,0,3.264,0.427,home_win
-2026-06-15,Belgium,Egypt,1,0,1.737,0.803,home_win
-2026-06-15,Saudi Arabia,Uruguay,1,1,0.701,2.039,draw
-2026-06-16,France,Senegal,1,0,1.662,0.814,home_win
-2026-06-16,Iraq,Norway,0,1,0.802,1.782,away_win
-2026-06-16,Argentina,Algeria,1,0,1.916,0.697,home_win
-2026-06-16,Austria,Jordan,1,0,1.67,0.856,home_win
-2026-06-17,Portugal,DR Congo,2,0,2.232,0.629,home_win
-2026-06-17,England,Croatia,1,0,1.371,0.985,home_win
-2026-06-17,Uzbekistan,Colombia,0,1,0.711,1.945,away_win
-2026-06-17,Ghana,Panama,1,1,0.894,1.652,draw
+2026-06-15,Saudi Arabia,Uruguay,0,2,0.702,2.038,away_win
+2026-06-15,Iran,New Zealand,2,0,1.815,0.793,home_win
+2026-06-16,France,Senegal,2,0,1.662,0.815,home_win
+2026-06-16,Iraq,Norway,0,2,0.803,1.782,away_win
+2026-06-16,Austria,Jordan,2,0,1.67,0.857,home_win
+2026-06-16,Argentina,Algeria,2,0,1.916,0.697,home_win
+2026-06-17,England,Croatia,1,0,1.371,0.986,home_win
+2026-06-17,Portugal,DR Congo,2,0,2.231,0.63,home_win
+2026-06-17,Uzbekistan,Colombia,0,2,0.712,1.945,away_win
+2026-06-17,Ghana,Panama,1,1,0.895,1.652,draw
 2026-06-18,Mexico,South Korea,1,0,1.319,1.051,home_win
+2026-06-18,Canada,Qatar,2,0,2.084,0.706,home_win
 2026-06-18,Switzerland,Bosnia and Herzegovina,2,0,2.032,0.71,home_win
-2026-06-18,Canada,Qatar,2,0,2.085,0.705,home_win
-2026-06-18,Czech Republic,South Africa,1,0,1.583,0.931,home_win
-2026-06-19,Brazil,Haiti,2,0,2.637,0.532,home_win
-2026-06-19,Scotland,Morocco,0,1,0.867,1.612,away_win
+2026-06-18,Czech Republic,South Africa,2,0,1.583,0.932,home_win
 2026-06-19,United States,Australia,1,0,1.1,1.271,home_win
+2026-06-19,Scotland,Morocco,0,2,0.867,1.612,away_win
 2026-06-19,Turkey,Paraguay,1,0,1.316,1.078,home_win
-2026-06-20,Germany,Ivory Coast,1,0,1.696,0.817,home_win
-2026-06-20,Ecuador,Curaçao,2,0,2.684,0.541,home_win
-2026-06-20,Netherlands,Sweden,1,0,1.821,0.766,home_win
-2026-06-20,Tunisia,Japan,0,1,0.753,1.866,away_win
-2026-06-21,Belgium,Iran,1,0,1.39,0.986,home_win
-2026-06-21,New Zealand,Egypt,0,1,0.99,1.478,away_win
-2026-06-21,Spain,Saudi Arabia,2,0,2.987,0.464,home_win
-2026-06-21,Uruguay,Cape Verde,2,0,2.228,0.646,home_win
-2026-06-22,France,Iraq,2,0,2.428,0.574,home_win
-2026-06-22,Norway,Senegal,1,0,1.22,1.138,home_win
-2026-06-22,Argentina,Austria,1,0,1.916,0.697,home_win
-2026-06-22,Jordan,Algeria,0,1,0.856,1.67,away_win
-2026-06-23,Portugal,Uzbekistan,1,0,1.889,0.734,home_win
-2026-06-23,Panama,Croatia,0,1,0.865,1.623,away_win
+2026-06-19,Brazil,Haiti,2,0,2.636,0.533,home_win
+2026-06-20,Germany,Ivory Coast,2,0,1.641,0.843,home_win
+2026-06-20,Netherlands,Sweden,2,0,1.734,0.803,home_win
+2026-06-20,Tunisia,Japan,0,2,0.72,1.959,away_win
+2026-06-20,Ecuador,Curaçao,2,0,2.602,0.56,home_win
+2026-06-21,Spain,Saudi Arabia,2,0,2.931,0.473,home_win
+2026-06-21,Belgium,Iran,1,0,1.377,0.997,home_win
+2026-06-21,New Zealand,Egypt,0,1,0.98,1.493,away_win
+2026-06-21,Uruguay,Cape Verde,2,0,2.184,0.659,home_win
+2026-06-22,France,Iraq,2,0,2.427,0.574,home_win
+2026-06-22,Norway,Senegal,1,0,1.22,1.139,home_win
+2026-06-22,Jordan,Algeria,0,2,0.857,1.67,away_win
+2026-06-22,Argentina,Austria,2,0,1.916,0.697,home_win
+2026-06-23,Portugal,Uzbekistan,2,0,1.888,0.735,home_win
+2026-06-23,Panama,Croatia,0,2,0.866,1.623,away_win
 2026-06-23,Colombia,DR Congo,2,0,2.298,0.61,home_win
-2026-06-23,England,Ghana,2,0,2.618,0.543,home_win
-2026-06-24,Scotland,Brazil,0,1,0.694,1.979,away_win
-2026-06-24,Morocco,Haiti,2,0,2.148,0.665,home_win
-2026-06-24,South Africa,South Korea,0,1,0.765,1.898,away_win
-2026-06-24,Czech Republic,Mexico,0,1,0.876,1.606,away_win
-2026-06-24,Bosnia and Herzegovina,Qatar,1,0,1.399,1.087,home_win
-2026-06-24,Switzerland,Canada,1,0,1.318,1.058,home_win
-2026-06-25,Curaçao,Ivory Coast,0,2,0.737,2.019,away_win
-2026-06-25,Ecuador,Germany,1,1,1.086,1.245,draw
-2026-06-25,Paraguay,Australia,0,1,0.993,1.419,away_win
-2026-06-25,Turkey,United States,1,0,1.178,1.194,home_win
-2026-06-25,Japan,Sweden,1,0,1.767,0.792,home_win
-2026-06-25,Tunisia,Netherlands,0,1,0.729,1.924,away_win
-2026-06-26,Senegal,Iraq,1,0,1.724,0.832,home_win
-2026-06-26,Norway,France,0,1,0.842,1.603,away_win
-2026-06-26,Egypt,Iran,0,1,0.96,1.473,away_win
-2026-06-26,New Zealand,Belgium,0,2,0.663,2.14,away_win
-2026-06-26,Cape Verde,Saudi Arabia,1,1,1.126,1.336,draw
-2026-06-26,Uruguay,Spain,0,1,0.773,1.714,away_win
-2026-06-27,Panama,England,0,1,0.729,1.902,away_win
-2026-06-27,Croatia,Ghana,2,0,2.234,0.645,home_win
-2026-06-27,Algeria,Austria,1,0,1.18,1.18,home_win
-2026-06-27,Jordan,Argentina,0,2,0.506,2.713,away_win
+2026-06-23,England,Ghana,2,0,2.616,0.543,home_win
+2026-06-24,Czech Republic,Mexico,0,2,0.877,1.606,away_win
+2026-06-24,Morocco,Haiti,2,0,2.148,0.666,home_win
+2026-06-24,South Africa,South Korea,0,2,0.765,1.898,away_win
+2026-06-24,Scotland,Brazil,0,2,0.694,1.979,away_win
+2026-06-24,Bosnia and Herzegovina,Qatar,1,0,1.399,1.088,home_win
+2026-06-24,Switzerland,Canada,1,0,1.318,1.059,home_win
+2026-06-25,Japan,Sweden,2,0,1.685,0.828,home_win
+2026-06-25,Tunisia,Netherlands,0,2,0.698,2.016,away_win
+2026-06-25,Turkey,United States,0,1,1.179,1.194,away_win
+2026-06-25,Curaçao,Ivory Coast,0,2,0.713,2.081,away_win
+2026-06-25,Ecuador,Germany,1,1,1.054,1.287,draw
+2026-06-25,Paraguay,Australia,0,1,0.994,1.419,away_win
+2026-06-26,Senegal,Iraq,2,0,1.724,0.832,home_win
+2026-06-26,Norway,France,0,2,0.842,1.603,away_win
+2026-06-26,Egypt,Iran,0,1,0.97,1.458,away_win
+2026-06-26,Cape Verde,Saudi Arabia,1,1,1.147,1.31,draw
+2026-06-26,Uruguay,Spain,0,2,0.789,1.683,away_win
+2026-06-26,New Zealand,Belgium,0,2,0.67,2.118,away_win
+2026-06-27,Panama,England,0,2,0.729,1.902,away_win
+2026-06-27,DR Congo,Uzbekistan,0,1,1.03,1.419,away_win
+2026-06-27,Jordan,Argentina,0,2,0.506,2.712,away_win
 2026-06-27,Colombia,Portugal,0,1,1.19,1.119,away_win
-2026-06-27,DR Congo,Uzbekistan,0,1,1.029,1.418,away_win
+2026-06-27,Croatia,Ghana,2,0,2.233,0.645,home_win
+2026-06-27,Algeria,Austria,1,1,1.18,1.18,draw

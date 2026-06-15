@@ -121,6 +121,15 @@ POISSON_MIN_DATE <- as.Date("2010-01-01")
 # A 6x6 grid (0-5) covers >99% of all international match scorelines.
 MAX_GOALS <- 5L
 
+# Dixon-Coles low-score dependency correction (rho < 0 empirically).
+# With rho = -0.15 the four low-scoring cells shift as follows:
+#   P(0-0) × (1 − λμρ) → increased  (0-0 draws are more common than indep. Poisson)
+#   P(1-0) × (1 + λρ)  → decreased
+#   P(0-1) × (1 + μρ)  → decreased
+#   P(1-1) × (1 − ρ)   → increased  (1-1 draws also over-represented)
+# The matrix is renormalised after applying the four modifiers.
+DC_RHO <- -0.15
+
 # Global random seed used by all scripts for reproducibility.
 GLOBAL_SEED <- 42L
 
