@@ -2,16 +2,17 @@
 # 09_live_notify.R  --  Per-game Discord/Slack notifications (pre + post match).
 #
 # Run every 30 min by .github/workflows/notify.yml during tournament hours.
-# Stateless: tight time windows ensure each 30-min run fires at most once per
-# game per event type — no state file or dedup database required.
+# Uses a state file (output/notification_log.csv) to guarantee exactly one
+# notification per game per event type regardless of timezone uncertainty.
 #
-# Pre-match  : sent when kick-off is 45 – 75 min away.
-# Post-match : sent when the fixture API marks the game finished AND the game
-#              clock (kickoff + 95 min) fell in the last 30-min window.
+# Pre-match  : sent once when kick-off is 45 – 75 min away (estimated UTC).
+# Post-match : sent once when finished == TRUE, regardless of kick-off time.
+#              A 3-hour grace window prevents re-firing stale finished games
+#              from days ago if the log is ever reset.
 #
 # Timezone note: local_date in the fixture JSON is venue local time.  The
-# constant VENUE_UTC_OFFSET converts it to UTC (default = -5 = CDT, which
-# covers most WC 2026 venues).  Adjust for Pacific venues (PDT = -7).
+# constant VENUE_UTC_OFFSET converts it to UTC (default = -5 = CDT).  The
+# pre-match timing depends on this; the post-match does NOT (uses finished flag).
 #
 # Required env var:  WEBHOOK_URL
 # Optional  env var: VENUE_UTC_OFFSET  (integer; default -5)
@@ -43,15 +44,37 @@ if (nchar(trimws(WEBHOOK_URL)) == 0) {
 }
 
 # Timezone offset: local_date → UTC.  CDT = UTC−5 means we ADD 5 hours.
-VENUE_UTC_OFFSET <- as.integer(Sys.getenv("VENUE_UTC_OFFSET", unset = "-5"))
-PREMATCH_MIN     <- 45L    # }  send pre-match when kick-off is between
-PREMATCH_MAX     <- 75L    # }  45 and 75 minutes away (30-min slot)
-POSTMATCH_MIN    <- 95L    # }  send post-match when game clock (kickoff + 95)
-POSTMATCH_MAX    <- 125L   # }  is 0 – 30 min in the past
-MIN_EDGE         <- 0.03
+VENUE_UTC_OFFSET  <- as.integer(Sys.getenv("VENUE_UTC_OFFSET", unset = "-5"))
+PREMATCH_MIN      <- 45L   # send pre-match when kick-off is 45–75 min away
+PREMATCH_MAX      <- 75L
+POSTMATCH_MAX_AGE <- 180L  # ignore finished games whose kick-off was >3 h ago
+MIN_EDGE          <- 0.03
+
+# State file — tracks which notifications have been sent to avoid duplicates.
+LOG_FILE <- file.path(PATHS$output, "notification_log.csv")
 
 now_utc <- as.POSIXct(Sys.time(), tz = "UTC")
 log_msg("Live notify check at ", format(now_utc, "%Y-%m-%d %H:%M UTC"))
+
+# ── Load / initialise state file ─────────────────────────────────────────────
+if (file.exists(LOG_FILE)) {
+  notif_log <- tryCatch(
+    read_csv(LOG_FILE, show_col_types = FALSE, col_types = "ccc"),
+    error = function(e) tibble(match_id = character(), type = character(), sent_at = character())
+  )
+} else {
+  notif_log <- tibble(match_id = character(), type = character(), sent_at = character())
+}
+
+already_sent <- function(mid, type) {
+  any(notif_log$match_id == mid & notif_log$type == type)
+}
+
+record_sent <- function(mid, type) {
+  new_row <- tibble(match_id = mid, type = type,
+                    sent_at = format(now_utc, "%Y-%m-%d %H:%M:%S"))
+  notif_log <<- bind_rows(notif_log, new_row)
+}
 
 # ── Parse fixture JSON ────────────────────────────────────────────────────────
 if (!file.exists(FILES$fixtures_raw)) {
@@ -152,7 +175,8 @@ for (i in seq_len(nrow(fixtures))) {
   mins_to <- as.numeric(difftime(f$kickoff_utc, now_utc, units = "mins"))
 
   # ── PRE-MATCH ──────────────────────────────────────────────────────────────
-  if (!f$finished && mins_to >= PREMATCH_MIN && mins_to <= PREMATCH_MAX) {
+  if (!f$finished && mins_to >= PREMATCH_MIN && mins_to <= PREMATCH_MAX &&
+      !already_sent(f$match_id, "prematch")) {
     log_msg(sprintf("PRE-MATCH window: %s vs %s (kick-off in %.0f min)",
                     f$home_team, f$away_team, mins_to))
 
@@ -199,18 +223,21 @@ for (i in seq_len(nrow(fixtures))) {
     }
 
     send_msg(msg)
+    record_sent(f$match_id, "prematch")
     notified <- notified + 1L
   }
 
   # ── POST-MATCH ─────────────────────────────────────────────────────────────
-  # Trigger when finished == TRUE and the simulated "game clock" (kickoff + 95)
-  # landed in the POSTMATCH window. This catches the result within ~30 min of
-  # full time without needing any state file.
-  mins_since_end <- -(mins_to) - 95L  # minutes since kickoff+95 (game clock)
+  # Trigger as soon as finished == TRUE and we haven't notified yet.
+  # The 3-hour age cap prevents re-firing very old finished games if the log
+  # is ever wiped. Timezone uncertainty doesn't matter here — we rely only on
+  # the finished flag, not on kick-off time arithmetic.
+  mins_since_kickoff <- -mins_to   # positive = kick-off was in the past
 
   if (f$finished &&
       !is.na(f$home_score) && !is.na(f$away_score) &&
-      mins_since_end >= 0L && mins_since_end <= (POSTMATCH_MAX - POSTMATCH_MIN)) {
+      mins_since_kickoff <= POSTMATCH_MAX_AGE &&
+      !already_sent(f$match_id, "postmatch")) {
 
     log_msg(sprintf("POST-MATCH window: %s vs %s (%d–%d)",
                     f$home_team, f$away_team, f$home_score, f$away_score))
@@ -246,8 +273,15 @@ for (i in seq_len(nrow(fixtures))) {
     }
 
     send_msg(msg)
+    record_sent(f$match_id, "postmatch")
     notified <- notified + 1L
   }
+}
+
+# ── Persist state file ────────────────────────────────────────────────────────
+if (notified > 0L) {
+  write_csv(notif_log, LOG_FILE)
+  log_msg("State file updated: ", nrow(notif_log), " entries in ", LOG_FILE)
 }
 
 log_msg(sprintf("Done — %d notification(s) sent.", notified))

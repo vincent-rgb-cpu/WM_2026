@@ -14,7 +14,7 @@ on:
   workflow_dispatch:              # manual trigger for testing
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   notify:
@@ -54,3 +54,13 @@ jobs:
           # Override if most games are in a different timezone (PDT = -7, EDT = -4)
           # VENUE_UTC_OFFSET: '-5'
         run: Rscript scripts/09_live_notify.R
+
+      # Commit the state file so dedup survives across runs.
+      - name: Commit notification log
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/notification_log.csv || true
+          git diff --cached --quiet || \
+            git commit -m "ci: update notification log [skip ci]"
+          git push || true
