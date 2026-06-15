@@ -31,7 +31,7 @@ jobs:
           use-public-rspm: true
 
       - name: Install R packages
-        run: Rscript -e "install.packages(c('httr','dplyr','readr','lubridate'), repos='https://cloud.r-project.org')"
+        run: Rscript -e "install.packages(c('httr','dplyr','readr','lubridate'))"
 
       # Refresh fixtures so kick-off times and results are current.
       - name: Refresh WC fixtures

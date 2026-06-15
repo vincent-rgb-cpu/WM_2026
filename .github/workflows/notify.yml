@@ -36,7 +36,7 @@ jobs:
 
       # Only the packages the script actually uses.
       - name: Install R packages
-        run: Rscript -e "install.packages(c('httr','dplyr','jsonlite','lubridate','readr'), repos='https://cloud.r-project.org')"
+        run: Rscript -e "install.packages(c('httr','dplyr','jsonlite','lubridate','readr'))"
 
       # Refresh fixtures so finished / scores are current.
       - name: Refresh WC fixtures
