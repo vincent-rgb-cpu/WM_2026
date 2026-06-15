@@ -19,11 +19,12 @@
 # =============================================================================
 
 source("R/utils.R")
-load_pipeline("R")
+source("R/config.R")     # FILES, PATHS
 
 library(httr)
 library(dplyr)
 library(readr)
+library(lubridate)
 
 WEBHOOK_URL   <- Sys.getenv("WEBHOOK_URL")
 NOTIFY_SILENT <- identical(toupper(Sys.getenv("NOTIFY_SILENT")), "TRUE")
@@ -37,7 +38,8 @@ if (nchar(trimws(WEBHOOK_URL)) == 0) {
 }
 
 # --- 1. Load today's fixtures and supporting tables -------------------------
-today <- Sys.Date()
+# Use Zurich local date so "today" is correct even when the runner is UTC.
+today <- as.Date(now(tz = "Europe/Zurich"))
 
 fixture_preds <- tryCatch(
   read_csv(FILES$fixture_preds, show_col_types = FALSE),
