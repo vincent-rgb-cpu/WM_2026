@@ -102,8 +102,8 @@ parse_game <- function(g) {
     away_team   = canonical_team(at),
     kickoff_utc = kickoff_utc,
     finished    = toupper(as.character(g$finished %||% "FALSE")) == "TRUE",
-    home_score  = suppressWarnings(as.integer(g$home_score)),
-    away_score  = suppressWarnings(as.integer(g$away_score)),
+    home_score  = suppressWarnings(as.integer(g$home_score %||% NA)),
+    away_score  = suppressWarnings(as.integer(g$away_score %||% NA)),
     stringsAsFactors = FALSE
   )
 }

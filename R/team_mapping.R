@@ -29,5 +29,5 @@ TEAM_NAME_MAP <- c(
 canonical_team <- function(x) {
   x <- trimws(x)
   hit <- TEAM_NAME_MAP[x]
-  ifelse(is.na(hit), x, unname(hit))
+  unname(ifelse(is.na(hit), x, unname(hit)))
 }
