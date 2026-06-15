@@ -16,6 +16,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   notify:
     runs-on: ubuntu-latest
@@ -31,15 +34,9 @@ jobs:
           r-version: '4.5'
           use-public-rspm: true
 
-      # Only the five packages the script actually uses.
+      # Only the packages the script actually uses.
       - name: Install R packages
-        run: |
-          Rscript -e "
-            pkgs <- c('httr', 'dplyr', 'jsonlite', 'lubridate', 'readr')
-            missing <- pkgs[!pkgs %in% rownames(installed.packages())]
-            if (length(missing))
-              install.packages(missing, repos = 'https://cloud.r-project.org')
-          "
+        run: Rscript -e "install.packages(c('httr','dplyr','jsonlite','lubridate','readr'), repos='https://cloud.r-project.org')"
 
       # Refresh fixtures so finished / scores are current.
       - name: Refresh WC fixtures

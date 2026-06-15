@@ -13,6 +13,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   morning-notify:
     runs-on: ubuntu-latest
@@ -28,13 +31,7 @@ jobs:
           use-public-rspm: true
 
       - name: Install R packages
-        run: |
-          Rscript -e "
-            pkgs <- c('httr', 'dplyr', 'readr', 'lubridate')
-            missing <- pkgs[!pkgs %in% rownames(installed.packages())]
-            if (length(missing))
-              install.packages(missing, repos = 'https://cloud.r-project.org')
-          "
+        run: Rscript -e "install.packages(c('httr','dplyr','readr','lubridate'), repos='https://cloud.r-project.org')"
 
       # Refresh fixtures so kick-off times and results are current.
       - name: Refresh WC fixtures
