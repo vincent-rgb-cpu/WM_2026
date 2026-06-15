@@ -5,7 +5,7 @@
 # Uses a state file (output/notification_log.csv) to guarantee exactly one
 # notification per game per event type regardless of timezone uncertainty.
 #
-# Pre-match  : sent once when kick-off is 45 – 75 min away (estimated UTC).
+# Pre-match  : sent once when kick-off is 45 \u2013 75 min away (estimated UTC).
 # Post-match : sent once when finished == TRUE, regardless of kick-off time.
 #              A 3-hour grace window prevents re-firing stale finished games
 #              from days ago if the log is ever reset.
@@ -39,24 +39,24 @@ source("R/team_mapping.R")  # canonical_team()
 
 WEBHOOK_URL <- Sys.getenv("WEBHOOK_URL")
 if (nchar(trimws(WEBHOOK_URL)) == 0) {
-  log_msg("WEBHOOK_URL is not set — skipping.")
+  log_msg("WEBHOOK_URL is not set \u2014 skipping.")
   quit(status = 0)
 }
 
-# Timezone offset: local_date → UTC.  CDT = UTC−5 means we ADD 5 hours.
+# Timezone offset: local_date \u2192 UTC.  CDT = UTC\u22125 means we ADD 5 hours.
 VENUE_UTC_OFFSET  <- as.integer(Sys.getenv("VENUE_UTC_OFFSET", unset = "-5"))
-PREMATCH_MIN      <- 45L   # send pre-match when kick-off is 45–75 min away
+PREMATCH_MIN      <- 45L   # send pre-match when kick-off is 45\u201375 min away
 PREMATCH_MAX      <- 75L
 POSTMATCH_MAX_AGE <- 180L  # ignore finished games whose kick-off was >3 h ago
 MIN_EDGE          <- 0.03
 
-# State file — tracks which notifications have been sent to avoid duplicates.
+# State file \u2014 tracks which notifications have been sent to avoid duplicates.
 LOG_FILE <- file.path(PATHS$output, "notification_log.csv")
 
 now_utc <- as.POSIXct(Sys.time(), tz = "UTC")
 log_msg("Live notify check at ", format(now_utc, "%Y-%m-%d %H:%M UTC"))
 
-# ── Load / initialise state file ─────────────────────────────────────────────
+# \u2500\u2500 Load / initialise state file \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 if (file.exists(LOG_FILE)) {
   notif_log <- tryCatch(
     read_csv(LOG_FILE, show_col_types = FALSE, col_types = "ccc"),
@@ -76,9 +76,9 @@ record_sent <- function(mid, type) {
   notif_log <<- bind_rows(notif_log, new_row)
 }
 
-# ── Parse fixture JSON ────────────────────────────────────────────────────────
+# \u2500\u2500 Parse fixture JSON \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 if (!file.exists(FILES$fixtures_raw)) {
-  log_msg("No fixture JSON at ", FILES$fixtures_raw, " — skipping.")
+  log_msg("No fixture JSON at ", FILES$fixtures_raw, " \u2014 skipping.")
   quit(status = 0)
 }
 
@@ -110,11 +110,11 @@ parse_game <- function(g) {
 
 fixtures <- do.call(rbind, Filter(Negate(is.null), lapply(games, parse_game)))
 if (is.null(fixtures) || nrow(fixtures) == 0) {
-  log_msg("No parseable fixtures — skipping.")
+  log_msg("No parseable fixtures \u2014 skipping.")
   quit(status = 0)
 }
 
-# ── Load supporting data (best-effort; script works without them) ────────────
+# \u2500\u2500 Load supporting data (best-effort; script works without them) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 preds <- tryCatch(
   read_csv(FILES$fixture_preds, show_col_types = FALSE),
   error = function(e) NULL
@@ -128,12 +128,12 @@ real_odds <- tryCatch(
   error = function(e) NULL
 )
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 send_msg <- function(msg) {
   resp <- tryCatch(
     httr::POST(
       url    = WEBHOOK_URL,
-      body   = list(content = msg, username = "WM 2026 Bot"),
+      body   = list(content = enc2utf8(msg), username = "WM 2026 Bot"),
       encode = "json",
       httr::timeout(15)
     ),
@@ -142,7 +142,7 @@ send_msg <- function(msg) {
   if (!is.null(resp) && !httr::http_error(resp)) {
     log_msg("Sent notification (HTTP ", httr::status_code(resp), ")")
   } else if (!is.null(resp)) {
-    log_msg("Webhook failed — HTTP ", httr::status_code(resp))
+    log_msg("Webhook failed \u2014 HTTP ", httr::status_code(resp))
   }
 }
 
@@ -155,7 +155,7 @@ pred_row <- function(ht, at) {
 score_str <- function(ht, at) {
   if (is.null(scorelines)) return(NA_character_)
   r <- scorelines %>% filter(Team_A == ht, Team_B == at)
-  if (nrow(r) == 0) NA_character_ else sprintf("%d–%d", r$Goals_A[1], r$Goals_B[1])
+  if (nrow(r) == 0) NA_character_ else sprintf("%d\u2013%d", r$Goals_A[1], r$Goals_B[1])
 }
 
 pred_label <- function(pred_result, ht, at) {
@@ -167,14 +167,14 @@ pred_label <- function(pred_result, ht, at) {
   )
 }
 
-# ── Check each fixture ────────────────────────────────────────────────────────
+# \u2500\u2500 Check each fixture \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 notified <- 0L
 
 for (i in seq_len(nrow(fixtures))) {
   f       <- fixtures[i, ]
   mins_to <- as.numeric(difftime(f$kickoff_utc, now_utc, units = "mins"))
 
-  # ── PRE-MATCH ──────────────────────────────────────────────────────────────
+  # \u2500\u2500 PRE-MATCH \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   if (!f$finished && mins_to >= PREMATCH_MIN && mins_to <= PREMATCH_MAX &&
       !already_sent(f$match_id, "prematch")) {
     log_msg(sprintf("PRE-MATCH window: %s vs %s (kick-off in %.0f min)",
@@ -199,25 +199,25 @@ for (i in seq_len(nrow(fixtures))) {
           edge <- bet_prob - 1 / bet_odds
           if (!is.na(edge) && edge >= MIN_EDGE)
             value_str <- sprintf(
-              "\n\U0001F4B0 **Value Bet: %s @ %.2f (%s) — Edge +%.1f%%**",
+              "\n\U0001F4B0 **Value Bet: %s @ %.2f (%s) \u2014 Edge +%.1f%%**",
               plabel, bet_odds, coalesce(or$bookmaker[1], "market"), edge * 100
             )
         }
       }
 
-      score_part <- if (!is.na(sc)) sprintf(" • Score: **%s**", sc) else ""
+      score_part <- if (!is.na(sc)) sprintf(" \u2022 Score: **%s**", sc) else ""
 
       msg <- paste0(
-        sprintf("⚽ **WM 2026 — Kick-off in ~%.0f min**\n\n", mins_to),
-        sprintf("▶ **%s vs %s**\n", f$home_team, f$away_team),
+        sprintf("\u26BD **WM 2026 \u2014 Kick-off in ~%.0f min**\n\n", mins_to),
+        sprintf("\u25B6 **%s vs %s**\n", f$home_team, f$away_team),
         sprintf("   Pred: **%s** (%.0f%%)%s%s\n\n",
                 plabel, bet_prob * 100, score_part, value_str),
         "_Dashboard: https://vincent-rgb-cpu.github.io/WM_2026/_"
       )
     } else {
       msg <- paste0(
-        sprintf("⚽ **WM 2026 — Kick-off in ~%.0f min**\n\n", mins_to),
-        sprintf("▶ **%s vs %s**\n\n", f$home_team, f$away_team),
+        sprintf("\u26BD **WM 2026 \u2014 Kick-off in ~%.0f min**\n\n", mins_to),
+        sprintf("\u25B6 **%s vs %s**\n\n", f$home_team, f$away_team),
         "_Dashboard: https://vincent-rgb-cpu.github.io/WM_2026/_"
       )
     }
@@ -227,10 +227,10 @@ for (i in seq_len(nrow(fixtures))) {
     notified <- notified + 1L
   }
 
-  # ── POST-MATCH ─────────────────────────────────────────────────────────────
+  # \u2500\u2500 POST-MATCH \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   # Trigger as soon as finished == TRUE and we haven't notified yet.
   # The 3-hour age cap prevents re-firing very old finished games if the log
-  # is ever wiped. Timezone uncertainty doesn't matter here — we rely only on
+  # is ever wiped. Timezone uncertainty doesn't matter here \u2014 we rely only on
   # the finished flag, not on kick-off time arithmetic.
   mins_since_kickoff <- -mins_to   # positive = kick-off was in the past
 
@@ -239,7 +239,7 @@ for (i in seq_len(nrow(fixtures))) {
       mins_since_kickoff <= POSTMATCH_MAX_AGE &&
       !already_sent(f$match_id, "postmatch")) {
 
-    log_msg(sprintf("POST-MATCH window: %s vs %s (%d–%d)",
+    log_msg(sprintf("POST-MATCH window: %s vs %s (%d\u2013%d)",
                     f$home_team, f$away_team, f$home_score, f$away_score))
 
     actual <- if (f$home_score > f$away_score) "home_win" else
@@ -249,12 +249,12 @@ for (i in seq_len(nrow(fixtures))) {
     if (!is.null(p)) {
       correct <- p$pred_result == actual
       plabel  <- pred_label(p$pred_result, f$home_team, f$away_team)
-      tick    <- if (correct) "✅" else "❌"
-      remark  <- if (correct) "← correct!" else "← wrong"
+      tick    <- if (correct) "\u2705" else "\u274C"
+      remark  <- if (correct) "\u2190 correct!" else "\u2190 wrong"
 
       msg <- paste0(
-        sprintf("\U0001F3C1 **WM 2026 — Full time** %s\n\n", tick),
-        sprintf("▶ **%s vs %s — %d–%d**\n",
+        sprintf("\U0001F3C1 **WM 2026 \u2014 Full time** %s\n\n", tick),
+        sprintf("\u25B6 **%s vs %s \u2014 %d\u2013%d**\n",
                 f$home_team, f$away_team, f$home_score, f$away_score),
         sprintf("   Predicted: **%s** (%.0f%%) %s\n\n",
                 plabel,
@@ -265,8 +265,8 @@ for (i in seq_len(nrow(fixtures))) {
       )
     } else {
       msg <- paste0(
-        "\U0001F3C1 **WM 2026 — Full time**\n\n",
-        sprintf("▶ **%s vs %s — %d–%d**\n\n",
+        "\U0001F3C1 **WM 2026 \u2014 Full time**\n\n",
+        sprintf("\u25B6 **%s vs %s \u2014 %d\u2013%d**\n\n",
                 f$home_team, f$away_team, f$home_score, f$away_score),
         "_Dashboard: https://vincent-rgb-cpu.github.io/WM_2026/_"
       )
@@ -278,10 +278,10 @@ for (i in seq_len(nrow(fixtures))) {
   }
 }
 
-# ── Persist state file ────────────────────────────────────────────────────────
+# \u2500\u2500 Persist state file \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 if (notified > 0L) {
   write_csv(notif_log, LOG_FILE)
   log_msg("State file updated: ", nrow(notif_log), " entries in ", LOG_FILE)
 }
 
-log_msg(sprintf("Done — %d notification(s) sent.", notified))
+log_msg(sprintf("Done \u2014 %d notification(s) sent.", notified))

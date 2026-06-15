@@ -4,7 +4,7 @@
 # Sends ONE message per day containing:
 #   1. All of today's scheduled fixtures with W/D/L prediction, probability,
 #      and most-likely exact scoreline from the Poisson model.
-#   2. Value-bet highlights for any match where edge ≥ MIN_EDGE.
+#   2. Value-bet highlights for any match where edge >= MIN_EDGE.
 #
 # Webhook format: Discord by default (payload key = "content").
 #   To use Slack incoming webhooks, change the payload key to "text".
@@ -31,7 +31,7 @@ MIN_EDGE      <- 0.03
 
 # --- 0. Guard: no webhook configured ----------------------------------------
 if (nchar(trimws(WEBHOOK_URL)) == 0) {
-  log_msg("WEBHOOK_URL is not set — skipping notification.")
+  log_msg("WEBHOOK_URL is not set -- skipping notification.")
   log_msg("  Set it with:  export WEBHOOK_URL=<your_webhook_url>")
   quit(status = 0)
 }
@@ -55,7 +55,7 @@ scorelines <- tryCatch(
 )
 
 if (is.null(fixture_preds)) {
-  log_msg("Missing fixture predictions — skipping notification.")
+  log_msg("Missing fixture predictions -- skipping notification.")
   quit(status = 0)
 }
 
@@ -65,10 +65,10 @@ todays_fixtures <- fixture_preds %>%
 
 if (nrow(todays_fixtures) == 0) {
   if (NOTIFY_SILENT) {
-    log_msg("No matches scheduled for ", format(today), " — silent mode, not sending.")
+    log_msg("No matches scheduled for ", format(today), " -- silent mode, not sending.")
     quit(status = 0)
   }
-  log_msg("No matches scheduled for ", format(today), " — nothing to send.")
+  log_msg("No matches scheduled for ", format(today), " -- nothing to send.")
   quit(status = 0)
 }
 
@@ -118,17 +118,25 @@ overview <- todays_fixtures %>%
   )
 
 # --- 4. Format each fixture line --------------------------------------------
+# Use R Unicode escapes (\uXXXX) so strings are correctly interpreted as
+# Unicode codepoints regardless of the system locale when the file is parsed.
+SOCCER  <- "\u26BD"        # \u26BD
+ARROW   <- "\u25B6"        # \u25B6
+BULLET  <- "\u2022"        # \u2022
+MONEY   <- "\U0001F4B0"    # \U0001F4B0
+
 game_lines <- overview %>%
   mutate(
     score_str = ifelse(
       !is.na(Goals_A) & !is.na(Goals_B),
-      sprintf("%d–%d", Goals_A, Goals_B),   # en-dash
-      "—"
+      sprintf("%d-%d", Goals_A, Goals_B),
+      "n/a"
     ),
     value_str = ifelse(
       !is.na(edge) & edge >= MIN_EDGE,
       sprintf(
-        "\n   \U0001F4B0 **Value Bet: %s @ %.2f (%s) — Edge +%.1f%%**",
+        "\n   %s **Value Bet: %s @ %.2f (%s) - Edge +%.1f%%**",
+        MONEY,
         pred_label,
         bet_odds,
         coalesce(bookmaker, "market"),
@@ -137,9 +145,11 @@ game_lines <- overview %>%
       ""
     ),
     line = sprintf(
-      "▶ **%s vs %s**\n   Pred: **%s** (%.0f%%) • Score: **%s**%s",
+      "%s **%s vs %s**\n   Pred: **%s** (%.0f%%) %s Score: **%s**%s",
+      ARROW,
       home_team, away_team,
       pred_label, bet_prob * 100,
+      BULLET,
       score_str,
       value_str
     )
@@ -152,22 +162,23 @@ log_msg(n_value, " value bet(s) identified for today.")
 
 # --- 6. Compose message -----------------------------------------------------
 header <- sprintf(
-  "⚽ **WM 2026 — %s** (%d fixture%s today)",
+  "%s **WM 2026 -- %s** (%d fixture%s today)",
+  "\u26BD",
   format(today, "%d %b %Y"),
   nrow(todays_fixtures),
   if (nrow(todays_fixtures) == 1) "" else "s"
 )
 
 footer <- sprintf(
-  "_Strategy: Quarter-Kelly │ Min edge: %g%% │ Dashboard: https://vincent-rgb-cpu.github.io/WM_2026/_",
+  "_Strategy: Quarter-Kelly | Min edge: %g%% | Dashboard: https://vincent-rgb-cpu.github.io/WM_2026/_",
   MIN_EDGE * 100
 )
 
-msg <- paste0(
+msg <- enc2utf8(paste0(
   header, "\n\n",
   paste(game_lines, collapse = "\n\n"),
   "\n\n", footer
-)
+))
 
 # --- 7. Send webhook POST ---------------------------------------------------
 resp <- tryCatch(
@@ -187,7 +198,7 @@ if (is.null(resp)) quit(status = 1)
 
 status <- httr::status_code(resp)
 if (httr::http_error(resp)) {
-  log_msg("Webhook POST failed — HTTP ", status)
+  log_msg("Webhook POST failed -- HTTP ", status)
   log_msg("  Response: ", httr::content(resp, "text", encoding = "UTF-8"))
   quit(status = 1)
 }
