@@ -79,3 +79,4 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+output/srf_predictions.csv
