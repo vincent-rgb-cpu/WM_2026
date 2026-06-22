@@ -68,8 +68,8 @@ predict_fixtures <- function(model, fixtures, ratings, team_form,
       p_away_win  = proba[, "away_win"],
       pred_result = RESULT_LEVELS[max.col(proba, ties.method = "first")]
     ) %>%
-    select(match_id, date, kickoff, group, stage, matchday, home_team, away_team,
-           p_home_win, p_draw, p_away_win, pred_result)
+    select(match_id, date, any_of("kickoff"), group, stage, matchday,
+           home_team, away_team, p_home_win, p_draw, p_away_win, pred_result)
 }
 
 # Monte-Carlo the group stage. For each simulation every group match is sampled
