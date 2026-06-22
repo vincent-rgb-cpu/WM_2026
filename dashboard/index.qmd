@@ -139,7 +139,7 @@ if (!is.null(fixture_preds) && nrow(fixture_preds) > 0) {
   played_ids   <- if (has_matches) match_log$match_id else integer(0)
   upcoming_all <- fixture_preds %>%
     filter(!(match_id %in% played_ids)) %>%
-    arrange(date)
+    arrange(kickoff)
 
   # Join Poisson scoreline predictions if available
   if (!is.null(scoreline_preds) && nrow(scoreline_preds) > 0) {

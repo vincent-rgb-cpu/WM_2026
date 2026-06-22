@@ -66,7 +66,8 @@ parse_fixtures <- function(raw) {
 
   tibble(
     match_id   = pull("id"),
-    date       = as_date(mdy_hm(pull("local_date"), quiet = TRUE)),
+    kickoff    = mdy_hm(pull("local_date"), quiet = TRUE),
+    date       = as_date(kickoff),
     home_team  = canonical_team(pull("home_team_name_en")),
     away_team  = canonical_team(pull("away_team_name_en")),
     home_score = to_num(pull("home_score")),
