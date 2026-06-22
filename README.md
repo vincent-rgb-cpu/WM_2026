@@ -47,7 +47,7 @@ after each result.
 
 ### WC-2026 live results
 
-**9 matches played** (through 14 Jun 2026) — accuracy **55.6 %**, mean log-loss **0.847**
+**20 matches played** (through 16 Jun 2026) — accuracy **55.0 %**, mean log-loss **0.890**
 
 | Date | Match | Score | Predicted | Correct |
 |------|-------|-------|-----------|---------|
@@ -60,23 +60,36 @@ after each result.
 | 13 Jun | Brazil vs Morocco | 1–1 | Home win | ✗ |
 | 13 Jun | Qatar vs Switzerland | 1–1 | Away win | ✗ |
 | 14 Jun | Germany vs Curaçao | 7–1 | Home win | ✓ |
+| 14 Jun | Ivory Coast vs Ecuador | 1–0 | Draw | ✗ |
+| 14 Jun | Netherlands vs Japan | 2–2 | Draw | ✓ |
+| 14 Jun | Sweden vs Tunisia | 5–1 | Home win | ✓ |
+| 15 Jun | Spain vs Cape Verde | 0–0 | Home win | ✗ |
+| 15 Jun | Iran vs New Zealand | 2–2 | Home win | ✗ |
+| 15 Jun | Saudi Arabia vs Uruguay | 1–1 | Away win | ✗ |
+| 15 Jun | Belgium vs Egypt | 1–1 | Home win | ✗ |
+| 16 Jun | France vs Senegal | 3–1 | Home win | ✓ |
+| 16 Jun | Iraq vs Norway | 1–4 | Away win | ✓ |
+| 16 Jun | Austria vs Jordan | 3–1 | Home win | ✓ |
+| 16 Jun | Argentina vs Algeria | 3–0 | Home win | ✓ |
+
+Draws continue to be the main blind spot: 9 of the 20 games ended in a draw, and the model correctly called only one (Netherlands vs Japan). The financial simulation has placed 3 Quarter-Kelly bets; bankroll stands at **1,063 units (+6.3 % ROI)**.
 
 ### Tournament odds (Monte-Carlo, N = 10,000)
 
 | Team        | Win Cup | Make Final | Make SF | Make QF | Make R16 |
 |-------------|:-------:|:----------:|:-------:|:-------:|:--------:|
-| France      | 17.2 %  |   29.0 %   | 45.2 %  | 61.4 %  |  83.1 %  |
-| Spain       | 15.5 %  |   24.3 %   | 39.6 %  | 50.4 %  |  70.5 %  |
-| Argentina   | 14.0 %  |   25.0 %   | 42.9 %  | 61.3 %  |  72.5 %  |
-| England     | 13.6 %  |   22.5 %   | 38.2 %  | 57.7 %  |  77.6 %  |
-| Brazil      |  8.6 %  |   16.2 %   | 28.6 %  | 47.2 %  |  69.3 %  |
-| Portugal    |  6.6 %  |   14.0 %   | 26.1 %  | 44.1 %  |  77.5 %  |
-| Colombia    |  4.4 %  |    9.3 %   | 16.6 %  | 30.2 %  |  54.5 %  |
-| Morocco     |  3.5 %  |    8.3 %   | 16.8 %  | 36.5 %  |  57.4 %  |
-| Germany     |  2.8 %  |    7.1 %   | 15.9 %  | 30.2 %  |  67.5 %  |
-| Belgium     |  1.9 %  |    6.0 %   | 13.8 %  | 36.4 %  |  68.4 %  |
-| Netherlands |  1.8 %  |    5.1 %   | 11.9 %  | 27.3 %  |  44.8 %  |
-| Switzerland |  1.3 %  |    3.8 %   | 10.2 %  | 36.9 %  |  67.3 %  |
+| Argentina   | 16.3 %  |   28.1 %   | 47.0 %  | 62.2 %  |  98.2 %  |
+| Spain       | 16.2 %  |   26.1 %   | 39.2 %  | 52.1 %  |  98.9 %  |
+| England     | 12.5 %  |   20.9 %   | 34.7 %  | 55.1 %  |  98.5 %  |
+| France      |  9.8 %  |   18.7 %   | 33.7 %  | 51.2 %  |  97.2 %  |
+| Portugal    |  9.6 %  |   17.8 %   | 29.8 %  | 50.4 %  |  98.4 %  |
+| Brazil      |  9.0 %  |   16.5 %   | 30.0 %  | 48.4 %  |  97.3 %  |
+| Germany     |  4.9 %  |   10.7 %   | 22.4 %  | 38.1 %  |  96.9 %  |
+| Belgium     |  3.2 %  |    8.1 %   | 17.2 %  | 41.1 %  |  96.4 %  |
+| Netherlands |  3.1 %  |    7.0 %   | 15.9 %  | 31.4 %  |  92.8 %  |
+| Morocco     |  3.0 %  |    7.2 %   | 15.7 %  | 32.7 %  |  93.1 %  |
+| Colombia    |  1.9 %  |    5.4 %   | 12.0 %  | 27.3 %  |  94.7 %  |
+| Norway      |  1.7 %  |    4.8 %   | 10.9 %  | 23.1 %  |  90.5 %  |
 
 Full results for all 48 teams are in `output/tournament_probabilities.csv` and
 shown in the dashboard.
