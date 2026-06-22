@@ -12,6 +12,8 @@ on:
       - 'dashboard/**'
       - 'renv.lock'
       - '.github/workflows/benchmark.yml'
+      - 'data/raw/wc2026_fixtures.json'
+      - 'output/**'
   workflow_dispatch:   # manual trigger from the GitHub Actions tab
 
 permissions:
