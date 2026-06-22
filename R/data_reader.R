@@ -27,19 +27,19 @@ fetch_fixtures <- function(url = FIXTURES_URL, cache_file = FILES$fixtures_raw,
     return(fromJSON(cache_file, simplifyVector = FALSE))
   }
   log_msg("Fixtures: downloading from ", url)
-  raw <- tryCatch(
-    fromJSON(url, simplifyVector = FALSE),
-    error = function(e) {
-      if (file.exists(cache_file)) {
-        log_msg("  download failed, falling back to cache")
-        return(fromJSON(cache_file, simplifyVector = FALSE))
-      }
-      stop(e)
-    }
-  )
   ensure_dirs()
-  write_json(raw, cache_file, auto_unbox = TRUE)
-  raw
+  # Use curl -k to tolerate the server's self-signed / mismatched cert on macOS
+  # (LibreSSL rejects it even though OpenSSL on Linux accepts it fine).
+  ok <- system2("curl", c("-sf", "-k", "--max-time", "20", "-o", cache_file, url),
+                stdout = FALSE, stderr = FALSE) == 0L
+  if (ok && file.exists(cache_file)) {
+    return(fromJSON(cache_file, simplifyVector = FALSE))
+  }
+  if (file.exists(cache_file)) {
+    log_msg("  download failed, falling back to cache")
+    return(fromJSON(cache_file, simplifyVector = FALSE))
+  }
+  stop("Fixture download failed and no cache file found at ", cache_file)
 }
 
 # Parse the raw JSON into a tidy tibble, one row per match.
