@@ -47,49 +47,69 @@ after each result.
 
 ### WC-2026 live results
 
-**20 matches played** (through 16 Jun 2026) — accuracy **55.0 %**, mean log-loss **0.890**
+**40 matches played** (through 21 Jun 2026) — accuracy **60.0 %**, mean log-loss **0.861**
 
 | Date | Match | Score | Predicted | Correct |
 |------|-------|-------|-----------|---------|
-| 11 Jun | Mexico vs South Africa | 2–0 | Home win | ✓ |
-| 11 Jun | South Korea vs Czech Republic | 2–1 | Home win | ✓ |
-| 12 Jun | Canada vs Bosnia and Herzegovina | 1–1 | Home win | ✗ |
-| 12 Jun | United States vs Paraguay | 4–1 | Home win | ✓ |
-| 13 Jun | Haiti vs Scotland | 0–1 | Away win | ✓ |
-| 13 Jun | Australia vs Turkey | 2–0 | Away win | ✗ |
-| 13 Jun | Brazil vs Morocco | 1–1 | Home win | ✗ |
-| 13 Jun | Qatar vs Switzerland | 1–1 | Away win | ✗ |
-| 14 Jun | Germany vs Curaçao | 7–1 | Home win | ✓ |
-| 14 Jun | Ivory Coast vs Ecuador | 1–0 | Draw | ✗ |
-| 14 Jun | Netherlands vs Japan | 2–2 | Draw | ✓ |
-| 14 Jun | Sweden vs Tunisia | 5–1 | Home win | ✓ |
-| 15 Jun | Spain vs Cape Verde | 0–0 | Home win | ✗ |
-| 15 Jun | Iran vs New Zealand | 2–2 | Home win | ✗ |
-| 15 Jun | Saudi Arabia vs Uruguay | 1–1 | Away win | ✗ |
-| 15 Jun | Belgium vs Egypt | 1–1 | Home win | ✗ |
-| 16 Jun | France vs Senegal | 3–1 | Home win | ✓ |
-| 16 Jun | Iraq vs Norway | 1–4 | Away win | ✓ |
-| 16 Jun | Austria vs Jordan | 3–1 | Home win | ✓ |
-| 16 Jun | Argentina vs Algeria | 3–0 | Home win | ✓ |
+| 11 Jun | Mexico vs South Africa | 2-0 | Home win | ✓ |
+| 11 Jun | South Korea vs Czech Republic | 2-1 | Home win | ✓ |
+| 12 Jun | Canada vs Bosnia and Herzegovina | 1-1 | Home win | ✗ |
+| 12 Jun | United States vs Paraguay | 4-1 | Home win | ✓ |
+| 13 Jun | Haiti vs Scotland | 0-1 | Away win | ✓ |
+| 13 Jun | Australia vs Turkey | 2-0 | Away win | ✗ |
+| 13 Jun | Brazil vs Morocco | 1-1 | Home win | ✗ |
+| 13 Jun | Qatar vs Switzerland | 1-1 | Away win | ✗ |
+| 14 Jun | Germany vs Curaçao | 7-1 | Home win | ✓ |
+| 14 Jun | Netherlands vs Japan | 2-2 | Draw | ✓ |
+| 14 Jun | Sweden vs Tunisia | 5-1 | Home win | ✓ |
+| 14 Jun | Ivory Coast vs Ecuador | 1-0 | Away win | ✗ |
+| 15 Jun | Iran vs New Zealand | 2-2 | Home win | ✗ |
+| 15 Jun | Spain vs Cape Verde | 0-0 | Home win | ✗ |
+| 15 Jun | Belgium vs Egypt | 1-1 | Home win | ✗ |
+| 15 Jun | Saudi Arabia vs Uruguay | 1-1 | Away win | ✗ |
+| 16 Jun | France vs Senegal | 3-1 | Home win | ✓ |
+| 16 Jun | Iraq vs Norway | 1-4 | Away win | ✓ |
+| 16 Jun | Argentina vs Algeria | 3-0 | Home win | ✓ |
+| 16 Jun | Austria vs Jordan | 3-1 | Home win | ✓ |
+| 17 Jun | Portugal vs DR Congo | 1-1 | Home win | ✗ |
+| 17 Jun | England vs Croatia | 4-2 | Home win | ✓ |
+| 17 Jun | Uzbekistan vs Colombia | 1-3 | Away win | ✓ |
+| 17 Jun | Ghana vs Panama | 1-0 | Away win | ✗ |
+| 18 Jun | Mexico vs South Korea | 1-0 | Home win | ✓ |
+| 18 Jun | Switzerland vs Bosnia and Herzegovina | 4-1 | Home win | ✓ |
+| 18 Jun | Canada vs Qatar | 6-0 | Home win | ✓ |
+| 18 Jun | Czech Republic vs South Africa | 1-1 | Home win | ✗ |
+| 19 Jun | Brazil vs Haiti | 3-0 | Home win | ✓ |
+| 19 Jun | Scotland vs Morocco | 0-1 | Away win | ✓ |
+| 19 Jun | United States vs Australia | 2-0 | Home win | ✓ |
+| 19 Jun | Turkey vs Paraguay | 0-1 | Home win | ✗ |
+| 20 Jun | Germany vs Ivory Coast | 2-1 | Home win | ✓ |
+| 20 Jun | Ecuador vs Curaçao | 0-0 | Home win | ✗ |
+| 20 Jun | Netherlands vs Sweden | 5-1 | Home win | ✓ |
+| 20 Jun | Tunisia vs Japan | 0-4 | Away win | ✓ |
+| 21 Jun | Belgium vs Iran | 0-0 | Home win | ✗ |
+| 21 Jun | New Zealand vs Egypt | 1-3 | Away win | ✓ |
+| 21 Jun | Spain vs Saudi Arabia | 4-0 | Home win | ✓ |
+| 21 Jun | Uruguay vs Cape Verde | 2-2 | Home win | ✗ |
 
-Draws continue to be the main blind spot: 9 of the 20 games ended in a draw, and the model correctly called only one (Netherlands vs Japan). The financial simulation has placed 3 Quarter-Kelly bets; bankroll stands at **1,063 units (+6.3 % ROI)**.
+Draws remain the model's weak spot (10 of 40 games ended in a draw, correctly called only once). The financial simulation has placed 8 Quarter-Kelly bets; bankroll stands at **1,063 units (+6.3 % ROI)**.
 
 ### Tournament odds (Monte-Carlo, N = 10,000)
 
 | Team        | Win Cup | Make Final | Make SF | Make QF | Make R16 |
 |-------------|:-------:|:----------:|:-------:|:-------:|:--------:|
-| Argentina   | 16.3 %  |   28.1 %   | 47.0 %  | 62.2 %  |  98.2 %  |
-| Spain       | 16.2 %  |   26.1 %   | 39.2 %  | 52.1 %  |  98.9 %  |
-| England     | 12.5 %  |   20.9 %   | 34.7 %  | 55.1 %  |  98.5 %  |
-| France      |  9.8 %  |   18.7 %   | 33.7 %  | 51.2 %  |  97.2 %  |
-| Portugal    |  9.6 %  |   17.8 %   | 29.8 %  | 50.4 %  |  98.4 %  |
-| Brazil      |  9.0 %  |   16.5 %   | 30.0 %  | 48.4 %  |  97.3 %  |
-| Germany     |  4.9 %  |   10.7 %   | 22.4 %  | 38.1 %  |  96.9 %  |
-| Belgium     |  3.2 %  |    8.1 %   | 17.2 %  | 41.1 %  |  96.4 %  |
-| Netherlands |  3.1 %  |    7.0 %   | 15.9 %  | 31.4 %  |  92.8 %  |
-| Morocco     |  3.0 %  |    7.2 %   | 15.7 %  | 32.7 %  |  93.1 %  |
-| Colombia    |  1.9 %  |    5.4 %   | 12.0 %  | 27.3 %  |  94.7 %  |
-| Norway      |  1.7 %  |    4.8 %   | 10.9 %  | 23.1 %  |  90.5 %  |
+| Spain       | 18.2 %  |   28.1 %   | 42.9 %  | 55.3 %  |  99.2 %  |
+| Argentina   | 16.9 %  |   31.1 %   | 50.3 %  | 66.8 %  |  98.4 %  |
+| England     | 11.0 %  |   18.5 %   | 34.1 %  | 56.0 %  |  98.6 %  |
+| France      | 10.5 %  |   19.6 %   | 33.7 %  | 50.0 %  |  97.6 %  |
+| Portugal    | 10.1 %  |   19.0 %   | 29.9 %  | 52.5 %  |  98.2 %  |
+| Brazil      |  8.7 %  |   16.3 %   | 30.2 %  | 48.5 %  |  97.9 %  |
+| Germany     |  6.2 %  |   12.7 %   | 25.4 %  | 41.8 %  |  96.9 %  |
+| Belgium     |  3.0 %  |    7.6 %   | 17.1 %  | 41.2 %  |  96.5 %  |
+| Netherlands |  2.4 %  |    5.9 %   | 14.6 %  | 30.3 %  |  93.6 %  |
+| Colombia    |  2.2 %  |    5.9 %   | 13.5 %  | 31.1 %  |  93.9 %  |
+| Morocco     |  2.0 %  |    5.0 %   | 12.3 %  | 29.1 %  |  92.4 %  |
+| Japan       |  1.5 %  |    4.2 %   | 11.3 %  | 25.7 %  |  93.1 %  |
 
 Full results for all 48 teams are in `output/tournament_probabilities.csv` and
 shown in the dashboard.
