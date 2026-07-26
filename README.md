@@ -42,12 +42,32 @@ Evaluated on international matches from **2021 onwards** (never seen during trai
 | Baseline: majority class  |   0.480  |  17.97   | 1.040 |
 
 ~61 % three-way accuracy is realistic for international football (draws are
-inherently hard to predict). Live WC-2026 accuracy is updated on the dashboard
-after each result.
+inherently hard to predict).
 
-### WC-2026 live results
+### Final verdict — WC-2026 group stage
 
-**40 matches played** (through 21 Jun 2026) — accuracy **60.0 %**, mean log-loss **0.861**
+The pipeline tracked **40 matches** (full group stage, 11–21 Jun 2026) before automated
+CI was discontinued at the end of the group stage.
+
+| Metric | Value |
+|--------|-------|
+| Matches tracked | 40 (complete group stage) |
+| Three-way accuracy | **60.0 %** |
+| Mean log-loss | **0.861** |
+| Mean Brier score | **0.529** |
+| Bets placed (edge ≥ 3 %) | 8 |
+| Bet win rate | 5 / 8 (63 %) |
+| Final bankroll | **1,063 / 1,000 (+6.3 % ROI)** |
+
+**What worked well:**
+- Home wins and away wins were each called at **85–86 % accuracy** — the model's Elo-based strength signal is reliable when there is a clear favourite.
+- Financial simulation ended in the black despite a small sample of bets.
+- The model ranked Spain and Argentina as the two favourites at the end of the group stage, consistent with the tournament's eventual contenders.
+
+**Main weakness — draws:**
+13 of 40 group-stage games (32 %) ended in a draw; the model correctly called only **1 of 13** (8 %). This is the well-known blind spot of Elo-driven models: they assign draw probability of ~25–35 % to most competitive matches but rarely make it the *top* prediction, so draws almost never become the predicted outcome. A dedicated draw-propensity feature (e.g., historical draw rate by match importance or Elo proximity) would be the most impactful single improvement.
+
+### WC-2026 group-stage results (all 40 tracked matches)
 
 | Date | Match | Score | Predicted | Correct |
 |------|-------|-------|-----------|---------|
@@ -91,8 +111,6 @@ after each result.
 | 21 Jun | New Zealand vs Egypt | 1-3 | Away win | ✓ |
 | 21 Jun | Spain vs Saudi Arabia | 4-0 | Home win | ✓ |
 | 21 Jun | Uruguay vs Cape Verde | 2-2 | Home win | ✗ |
-
-Draws remain the model's weak spot (10 of 40 games ended in a draw, correctly called only once). The financial simulation has placed 8 Quarter-Kelly bets; bankroll stands at **1,063 units (+6.3 % ROI)**.
 
 ### Tournament odds (Monte-Carlo, N = 10,000)
 
