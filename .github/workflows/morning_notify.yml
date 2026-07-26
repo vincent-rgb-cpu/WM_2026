@@ -6,9 +6,7 @@ name: Morning Match Overview
 # Required secret: WEBHOOK_URL (Discord incoming webhook)
 
 on:
-  schedule:
-    - cron: '0 6 * * *'   # 06:00 UTC = 08:00 CEST (Zurich summer)
-  workflow_dispatch:       # manual trigger for testing
+  workflow_dispatch:   # manual trigger only — tournament concluded July 2026
 
 permissions:
   contents: read

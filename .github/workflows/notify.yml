@@ -8,10 +8,7 @@ name: Live Match Notifications
 # Required secret: WEBHOOK_URL (Discord or Slack incoming webhook).
 
 on:
-  schedule:
-    - cron: '0,30 12-23 * * *'   # 12:00–23:30 UTC
-    - cron: '0,30 0-4   * * *'   # 00:00–04:30 UTC
-  workflow_dispatch:              # manual trigger for testing
+  workflow_dispatch:   # manual trigger only — tournament concluded July 2026
 
 permissions:
   contents: write
